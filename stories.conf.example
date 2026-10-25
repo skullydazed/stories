@@ -1,11 +1,11 @@
-# Paths are relative to this configuration file. Create the two roots before starting.
-# In production place your edited file at ./stories.conf or /etc/stories.conf.
+# Copy to stories.conf and adjust the site settings below.
+# Paths are relative to this configuration file. Create both roots before starting.
 [server]
 listen = 127.0.0.1:8080
 threads = 8
 
 [content]
-root = ../docroot
+root = docroot
 resolution_order = disambiguation, command, function, on, ctcp, set, window, script, special
 # Byte limits apply independently to source and complete HTML output.
 markdown_limit = 8388608
@@ -20,4 +20,4 @@ Commands = /command/
 Functions = /function/
 
 [assets]
-root = ../site-assets
+root = site-assets

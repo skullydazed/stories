@@ -1,4 +1,5 @@
 /docroot/
+/stories.conf
 /build*/
 __pycache__/
 *.pyc

@@ -30,7 +30,7 @@ meson compile -C build
 meson test -C build --print-errorlogs
 ```
 
-Create a configuration from [examples/stories.conf](examples/stories.conf), create separate Markdown and asset roots, and adjust paths and navigation links. Relative filesystem paths resolve against the selected configuration file's directory, independently of the process working directory.
+Copy [stories.conf.example](stories.conf.example) to `stories.conf`, create separate Markdown and asset roots, and adjust paths and navigation links. The local `stories.conf` is ignored by Git. Relative filesystem paths resolve against the selected configuration file's directory, independently of the process working directory.
 
 ```sh
 ./build/stories --config /path/to/stories.conf --check-config

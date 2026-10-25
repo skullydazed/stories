@@ -42,7 +42,7 @@ core = static_library('stories-core', core_sources, entities, include_directorie
 core_dependency = declare_dependency(link_with: core, include_directories: includes, dependencies: md4c)
 stories = executable('stories', 'src/main.c', 'src/server.c', dependencies: [core_dependency, civetweb, threads], install: true)
 install_data('assets/pico.min.css', 'assets/LICENSE.pico.md', install_dir: get_option('datadir') / 'stories/assets')
-install_data('examples/stories.conf', 'examples/stories.freebsd', 'examples/nginx.conf', install_dir: get_option('datadir') / 'stories/examples')
+install_data('stories.conf.example', 'examples/stories.freebsd', 'examples/nginx.conf', install_dir: get_option('datadir') / 'stories/examples')
 install_data('LICENSE.md', install_dir: get_option('datadir') / 'licenses/stories')
 
 fixture_directory = meson.current_source_dir() / 'tests/fixtures'
