@@ -1,4 +1,4 @@
-project('stories', 'c', version: '0.1.0', meson_version: '>=1.3.0', default_options: ['c_std=c11', 'warning_level=3'])
+project('stories', 'c', version: files('VERSION')[0], meson_version: '>=1.3.0', default_options: ['c_std=c11', 'warning_level=3'])
 
 cc = meson.get_compiler('c')
 python = import('python').find_installation('python3')
@@ -8,11 +8,11 @@ if host_machine.system() == 'darwin'
   add_project_arguments('-D_DARWIN_C_SOURCE', language: 'c')
 endif
 
-civetweb = dependency('civetweb', required: false)
+civetweb = dependency('civetweb', method: 'pkg-config', required: false)
 if not civetweb.found()
   civetweb = cc.find_library('civetweb')
 endif
-md4c = dependency('md4c', required: false)
+md4c = dependency('md4c', method: 'pkg-config', required: false)
 if not md4c.found()
   md4c = cc.find_library('md4c')
 endif
@@ -22,7 +22,8 @@ foreach item : [['civetweb.h', civetweb], ['md4c.h', md4c]]
     error('Install the development headers for ' + item[0])
   endif
 endforeach
-if not cc.has_function('mg_get_server_ports', prefix: '#include <civetweb.h>', dependencies: civetweb)
+# Static CivetWeb builds need pthreads during the API link probe as well.
+if not cc.has_function('mg_get_server_ports', prefix: '#include <civetweb.h>', dependencies: [civetweb, threads])
   error('CivetWeb must provide mg_get_server_ports(). Install CivetWeb 1.16 or newer.')
 endif
 if not cc.has_header_symbol('md4c.h', 'MD_FLAG_TASKLISTS', dependencies: md4c)

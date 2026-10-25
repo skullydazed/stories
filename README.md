@@ -10,9 +10,10 @@ Stories serves HTTP behind a reverse proxy such as nginx, which handles TLS and 
 - CivetWeb 1.16 or newer, including development headers and file-serving support.
 - MD4C 0.4.8 or newer, including development headers. Stories uses the parser API directly.
 - Meson 1.3 or newer, Ninja, and Python 3.8 or newer for building and tests.
+- pkgconf for build-time dependency discovery.
 - Pico CSS 2.1.1 is included locally with its MIT license; there is no CDN or Node dependency.
 
-The build uses installed libraries and never downloads dependency sources. Meson uses pkg-config when available, with a compiler library lookup fallback. Set `PKG_CONFIG_PATH`, `CFLAGS`, or `LDFLAGS` when libraries are outside the compiler's search paths.
+Normal Meson builds use installed libraries and never download dependency sources. `PKG_CONFIG=pkgconf` selects pkgconf for Meson's dependency discovery. Libraries without discovery metadata use compiler lookup instead. Set `PKG_CONFIG_PATH`, `CFLAGS`, or `LDFLAGS` when libraries are outside the standard search paths. CI and release builds explicitly use [tools/build-dependencies.py](tools/build-dependencies.py) to resolve the latest upstream CivetWeb and MD4C release tags on every run and build static libraries in an isolated prefix. The release manifest records the selected tags, commits, and downloaded source checksums. CI installs the latest Meson available for its Python version.
 
 On macOS:
 
@@ -25,6 +26,7 @@ Use the corresponding development packages on FreeBSD or Linux. The server requi
 ## Build and run
 
 ```sh
+export PKG_CONFIG=pkgconf
 meson setup build
 meson compile -C build
 meson test -C build --print-errorlogs
@@ -110,7 +112,26 @@ Meson installs the binary, Pico stylesheet and license, example configuration, a
 
 Run as an unprivileged account with read access to content and public assets. See [examples/stories.freebsd](examples/stories.freebsd) for rc.d supervision and [examples/nginx.conf](examples/nginx.conf) for TLS and caching. Adjust paths, ownership, hostname, certificates, and cache directories. Proxy caching can delay content updates and permanent redirect changes.
 
-FreeBSD release verification should include a native build, `meson test`, a staged installation, asset serving, and SIGTERM under load. Provider-neutral Linux CI commands are in [tools/ci.sh](tools/ci.sh).
+Provider-neutral Linux sanitizer and fuzzing commands are in [tools/ci.sh](tools/ci.sh).
+
+## GitHub Actions and releases
+
+[CI](.github/workflows/ci.yml) runs on pull requests, pushes to `main`, and merge queue updates. It runs subsystem and HTTP tests on Linux, both macOS architectures, and FreeBSD in a native VM, plus ASan, UBSan, and all three libFuzzer smoke tests on Linux. The platform jobs also stage an installation, create an archive, and rerun the HTTP suite against the extracted binary. Logs, fuzz findings, and binary archives are retained as workflow artifacts for seven days. Actions are pinned to commit IDs.
+
+[Release](.github/workflows/release.yml) runs from **Actions → Release → Run workflow** on `main`. Select **patch**, **minor**, or **major** in the **Release type** dropdown. Python Semantic Release reads the Git release history and calculates the version number for that release type. The workflow supplies that version to Meson, builds and tests every platform, then creates the tag and publishes the release with its archives and SHA-256 checksums. No version edits, bump commits, or manual tagging are required. Release runs are serialized so concurrent requests cannot allocate the same version.
+
+Every platform builds the same resolved commit; only the final publication job has release write permission. An existing release is never overwritten; if publication fails after creating a draft, inspect that draft before rerunning. `VERSION` contains `0.0.0` for ordinary development builds and is stamped automatically during release builds.
+
+| Archive target | Build platform and runtime baseline |
+| --- | --- |
+| `linux-x86_64` | Ubuntu 22.04, glibc 2.35 or newer; not a musl binary |
+| `macos-arm64` | macOS 15, Apple Silicon |
+| `macos-x86_64` | macOS 15, Intel |
+| `freebsd14-amd64` | FreeBSD 14.4, amd64; built and tested inside FreeBSD |
+
+Each `stories-VERSION-TARGET.tar.gz` contains `bin/stories`, the README, and the normal `share/` installation tree with assets, examples, and licenses, including the linked dependencies' licenses and source checksums. CivetWeb and MD4C are statically linked; only platform system libraries are required at runtime. TLS remains the reverse proxy's responsibility. The macOS binaries are not Developer ID signed or notarized.
+
+Extract the archive, copy `share/stories/examples/stories.conf.example` to your chosen configuration path, and set the content and asset roots. For an extracted archive, point the asset root at its `share/stories/assets` directory. Paths still resolve relative to the configuration file, and the binary does not locate assets automatically. No configuration, content roots, or services are created by extraction.
 
 ## Tests and fuzzing
 

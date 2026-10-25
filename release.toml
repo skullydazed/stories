@@ -1,0 +1,6 @@
+[semantic_release]
+tag_format = "v{version}"
+allow_zero_version = true
+
+[semantic_release.branches.main]
+match = "main"
