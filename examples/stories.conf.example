@@ -1,24 +1,23 @@
 # Copy to stories.conf and adjust the site settings below.
 # Paths are relative to this configuration file. Create both roots before starting.
 [server]
-listen = 127.0.0.1:8080
-threads = 8
+#listen = 127.0.0.1:8080
+#threads = 8
 
 [content]
 root = docroot
-resolution_order = disambiguation, command, function, on, ctcp, set, window, script, special
+#resolution_order = 
+
 # Byte limits apply independently to source and complete HTML output.
-markdown_limit = 8388608
-output_limit = 33554432
+#markdown_limit = 8388608
+#output_limit = 33554432
 
 [site]
-title = EPIC6 Documentation
+title = Stories
 
 [navigation]
+# Anything defined here will be added as navigational links in the default layout.
 Home = /
-Commands = /command/
-Functions = /function/
 
 [assets]
-# Includes pico.min.css, served at /assets/pico.min.css.
 root = assets
