@@ -269,7 +269,7 @@ static int process(const char *template, size_t length, struct iwrap *iwrap, str
 		const char *name, *again;
 		size_t length, oplen, cllen;
 		char opstr[MUSTACH_MAX_DELIM_LENGTH], clstr[MUSTACH_MAX_DELIM_LENGTH];
-		unsigned enabled: 1, entered: 1;
+		unsigned enabled: 1, entered: 1, stdalone: 2;
 	} stack[MUSTACH_MAX_DEPTH];
 	size_t oplen, cllen, len, l;
 	int depth, rc, enabled, stdalone;
@@ -444,11 +444,12 @@ get_name:
 			stack[depth].name = beg;
 			stack[depth].again = template;
 			stack[depth].length = len;
-			/* Replayed bodies must begin with their section-entry delimiters. */
+			/* Replayed bodies must begin with their section-entry delimiters and line state. */
 			stack[depth].oplen = oplen;
 			stack[depth].cllen = cllen;
 			memcpy(stack[depth].opstr, opstr, oplen);
 			memcpy(stack[depth].clstr, clstr, cllen);
+			stack[depth].stdalone = stdalone;
 			stack[depth].enabled = enabled != 0;
 			stack[depth].entered = rc != 0;
 			if ((c == '#') == (rc == 0))
@@ -467,6 +468,10 @@ get_name:
 				cllen = stack[depth].cllen;
 				memcpy(opstr, stack[depth].opstr, oplen);
 				memcpy(clstr, stack[depth].clstr, cllen);
+				stdalone = stack[depth].stdalone;
+				/* Whitespace before the opening tag belongs outside the repeated body. */
+				pref.len = 0;
+				pref.prefix = NULL;
 				template = stack[depth++].again;
 			} else {
 				enabled = stack[depth].enabled;

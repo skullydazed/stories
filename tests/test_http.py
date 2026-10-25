@@ -468,7 +468,7 @@ class HttpTests(unittest.TestCase):
         self.servers.append(server)
         self.assertIn(b'<nav>No navigation</nav>', server.request('/')[2])
 
-    def test_template_delimiters_are_restored_for_section_replay(self):
+    def test_template_section_replay_preserves_parser_state(self):
         self.write_config()
         self.config.write_text(self.config.read_text().replace('Home=/\n', 'First=/first\nSecond=/second\nThird=/third\n'))
         server = Server(self.config, self.root)
@@ -480,6 +480,15 @@ class HttpTests(unittest.TestCase):
             ('{{=<% %>=}}<%#navigation%><%= {{ }} =%>{{label}}|{{/navigation}}after:{{site_title}}', 'First|Second|Third|after:HTTP Test'),
             ('{{#navigation}}{{=<% %>=}}<%label%>[<%#navigation%><%= [[ ]] =%>[[label]],[[/navigation]]][[/navigation]]after:[[site_title]]', 'First[First,Second,Third,]Second[First,Second,Third,]Third[First,Second,Third,]after:HTTP Test'),
             ('{{#navigation}}\n{{=<% %>=}}\n<%label%>\n<%/navigation%>\nafter:<%site_title%>\n', 'First\nSecond\nThird\nafter:HTTP Test\n'),
+            ('{{#navigation}}\n{{label}}{{/navigation}}\n', 'FirstSecondThird\n'),
+            ('{{#navigation}}\n{{=<% %>=}}\n<%label%><%/navigation%>\n', 'FirstSecondThird\n'),
+            ('prefix:{{#navigation}}\n{{label}}\n{{/navigation}}\n', 'prefix:\nFirst\n\nSecond\n\nThird\n'),
+            ('  {{#navigation}}[{{label}}]{{/navigation}}\n', '  [First][Second][Third]\n'),
+            ('  {{#navigation}}\n  {{label}}{{/navigation}}\n', '  First  Second  Third\n'),
+            ('prefix:{{#navigation}}{{label}}\n  {{/navigation}}\n', 'prefix:First\nSecond\nThird\n'),
+            ('{{#navigation}}\n{{label}}[{{#navigation}}\n{{label}}{{/navigation}}]{{/navigation}}\n', 'First[\nFirst\nSecond\nThird]Second[\nFirst\nSecond\nThird]Third[\nFirst\nSecond\nThird]\n'),
+            ('{{#navigation}}\r\n{{label}}{{/navigation}}\r\n', 'FirstSecondThird\r\n'),
+            ('{{#navigation}}\n{{label}}{{/navigation}}', 'FirstSecondThird'),
         ]
         for template, expected in cases:
             with self.subTest(template=template):
