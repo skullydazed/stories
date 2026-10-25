@@ -10,7 +10,7 @@
 
 `renderer` owns per-parse state and HTML emission. MD4C supplies borrowed, length-delimited strings, which are never assumed to be NUL-terminated or retained after callbacks. Parser-identified entities are decoded using a generated HTML5 lookup before escaping attributes or rewriting links. Rich image labels emit escaped text into `alt` attributes; ordinary raw HTML events remain verbatim elsewhere because publishers are trusted.
 
-`server` adapts these subsystems to CivetWeb. A `begin_request` callback completes document responses or returns zero for the static prefixes. CivetWeb owns connections and worker threads. Static MIME, range, and successful HEAD behavior belongs to CivetWeb, with listings and script recognition disabled. An `http_error` callback sends established-request errors through the shared shell and response helper, correcting CivetWeb 1.16's default HEAD error body. That callback uses the opposite return convention: zero means the error was handled.
+`server` adapts these subsystems to CivetWeb. A `begin_request` callback completes document responses or returns zero for unencoded static paths. Encoded asset paths are mapped to validated filenames and passed to CivetWeb's `mg_send_mime_file` API. CivetWeb owns connections, worker threads, and static MIME/range/HEAD response handling, with listings and script recognition disabled. An `http_error` callback sends established-request errors through the shared shell and response helper, correcting CivetWeb 1.16's default HEAD error body. That callback uses the opposite return convention: zero means the error was handled.
 
 ## Ownership and sequencing
 
@@ -26,7 +26,7 @@ Buffers own allocations, check arithmetic before growing, and retain a sticky fa
 
 Markdown paths reject NUL/control bytes, hidden components, backslashes, repeated separators, and dot segments. Each component is opened with `O_NOFOLLOW`; intermediate components must be directories and the final descriptor must identify a regular file. `O_NONBLOCK` prevents FIFOs from blocking before validation. Missing, inaccessible, or forbidden content is absent; resource and other I/O failures remain internal errors.
 
-CivetWeb decodes incoming paths once. Stories validates `local_uri_raw`, which retains dot segments, rather than trusting the cleaned `local_uri` or applying another decoder. Resolver fuzzing therefore begins at the decoded-path boundary. CivetWeb's decoder remains an external library contract.
+Automatic URI decoding is disabled because CivetWeb 1.16 decodes `request_uri` and `local_uri_raw` in place before invoking application callbacks. An embedded NUL would otherwise hide the remainder from `strlen` and routing. Stories preserves the original encoded `local_uri_raw`, calls `mg_url_decode` once with form decoding disabled, and validates the returned byte span before any decoded C-string operation. This rejects encoded NULs while allowing literal percent escapes such as `%2500` and preserving literal plus signs. Queries remain opaque and undecoded. Resolver fuzzing begins at the validated, decoded-path boundary; HTTP regressions cover the decoder boundary itself.
 
 Only `/assets/` and `/_stories/` permit static fallback. Their roots contain public files and must not overlap content. Asset symlinks follow CivetWeb's behavior. Script recognition is disabled even when the installed library includes scripting support. Stories completes all other routes, including 404s.
 

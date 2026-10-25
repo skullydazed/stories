@@ -90,11 +90,11 @@ Document limits must be positive and at most 1 GiB each. Exceeding either produc
 
 ## Static assets and HTTP
 
-`/assets/...` maps to the configured asset root. `/_stories/...` maps to installed application assets, including Pico CSS. These requests fall through to CivetWeb for static responses, including MIME types, HEAD, and byte ranges. Its error callback uses Stories' shared shell and response helper so errors also respect HEAD semantics. Static responses default to zero cache lifetime; configure caching at the reverse proxy.
+`/assets/...` maps to the configured asset root. `/_stories/...` maps to installed application assets, including Pico CSS. Unencoded asset paths fall through to CivetWeb; encoded paths are decoded and validated before their filenames are passed to CivetWeb's file-serving API. CivetWeb handles static MIME types, HEAD, and byte ranges in both cases. Its error callback uses Stories' shared shell and response helper so errors also respect HEAD semantics. Static responses default to zero cache lifetime; configure caching at the reverse proxy.
 
 Directory listings, CGI, SSI, and compiled-in script recognizers are disabled. Static trees are deliberately public and operator-managed; CivetWeb's normal static-file and symlink behavior applies. Keep private files and symlinks to private trees out of them. Markdown access separately rejects symlinks at every component using descriptor-relative opens.
 
-Stories completes all document responses, so missing documents never fall through to static serving. GET and HEAD are supported; other methods return 405 with `Allow: GET, HEAD`. Invalid paths return 400, missing documents 404, and filesystem/rendering failures 500. Dotfiles, dot segments, backslashes, and repeated separators are rejected. URL decoding belongs to CivetWeb and is not repeated by the resolver.
+Stories completes all document responses, so missing documents never fall through to static serving. GET and HEAD are supported; other methods return 405 with `Allow: GET, HEAD`. Invalid paths return 400, missing documents 404, and filesystem/rendering failures 500. Dotfiles, dot segments, backslashes, and repeated separators are rejected. Automatic URI decoding is disabled; the HTTP adapter uses CivetWeb's decoder once and validates its full returned byte count, including embedded NULs. The resolver never decodes again. Queries remain opaque.
 
 ## Install and deploy
 

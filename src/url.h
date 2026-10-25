@@ -3,8 +3,8 @@
 
 #include "buffer.h"
 
-/* Request paths have already been decoded ONCE by CivetWeb. This function
- * validates that representation and never performs another decoding pass. */
+/* The HTTP adapter decodes request paths once and supplies the full byte count.
+ * This function validates that span and never performs another decoding pass. */
 bool url_path_valid(const char *path, size_t size);
 bool url_markdown_extension(const char *path, size_t size);
 

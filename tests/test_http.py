@@ -147,7 +147,7 @@ class HttpTests(unittest.TestCase):
 
     def test_head_parity_and_no_wire_body(self):
         server = self.start()
-        for path in ['/', '/command/time', '/time', '/missing', '/function/', '/assets/sample.txt', '/assets/missing', '/_stories/pico.min.css']:
+        for path in ['/', '/command/time', '/time', '/missing', '/function/', '/assets/sample.txt', '/assets/sam%70le.txt', '/%61ssets/sample.txt', '/assets/missing', '/assets/miss%69ng', '/_stories/pico.min.css', '/_stories/%70ico.min.css']:
             with self.subTest(path=path):
                 get_status, get_headers, get_body = server.request(path)
                 head_status, head_headers, head_body = server.request(path, 'HEAD')
@@ -182,6 +182,12 @@ class HttpTests(unittest.TestCase):
         status, _, body = server.request('/assets/sample.txt', headers={'Range': 'bytes=0-4'})
         self.assertEqual(status, 206)
         self.assertEqual(body, b'asset')
+        status, _, body = server.request('/assets/sam%70le.txt', headers={'Range': 'bytes=0-4'})
+        self.assertEqual(status, 206)
+        self.assertEqual(body, b'asset')
+        status, _, body = server.request('/assets/sam%70le.txt', headers={'If-None-Match': headers['etag']})
+        self.assertEqual(status, 304)
+        self.assertEqual(body, b'')
         self.assertEqual(server.request('/assets/a%20b.txt')[2], b'space filename')
         self.assertEqual(server.request('/assets/sample.cgi')[2], b'#!/bin/sh\nprintf should-not-execute\n')
         self.assertEqual(server.request('/assets/missing')[0], 404)
@@ -203,6 +209,37 @@ class HttpTests(unittest.TestCase):
                 self.assertNotIn(b'outside secret', body)
                 self.assertNotIn(b'must not leak', body)
         self.assertEqual(server.request('/command/%252e%252e/time')[0], 404)
+
+    def test_encoded_nul_paths_are_rejected(self):
+        server = self.start()
+        paths = ['/%00', '/index%00junk', '/command/time%00.md', '/time%00_command', '/assets/sample.txt%00junk', '/_stories/pico.min.css%00junk', '/assets/%00/sample.txt']
+        for path in paths:
+            for method in ['GET', 'HEAD']:
+                with self.subTest(path=path, method=method):
+                    status, headers, body = server.request(path, method)
+                    self.assertEqual(status, 400)
+                    self.assertNotIn('location', headers)
+                    if method == 'HEAD':
+                        self.assertEqual(body, b'')
+                        wire_headers, wire_body = server.raw(method, path)
+                        self.assertIn(b' 400 ', wire_headers.split(b'\r\n', 1)[0])
+                        self.assertEqual(wire_body, b'')
+
+    def test_request_paths_are_decoded_once(self):
+        (self.content / 'command' / '%00.md').write_text('# Literal percent zero\n')
+        (self.content / 'command' / 'a+b.md').write_text('# Literal plus\n')
+        (self.assets / '%00.txt').write_text('literal percent zero')
+        (self.assets / 'a+b.txt').write_text('literal plus')
+        server = self.start()
+        self.assertIn(b'Literal percent zero', server.request('/command/%2500')[2])
+        self.assertEqual(server.request('/assets/%2500.txt')[2], b'literal percent zero')
+        for path in ['/command/a+b', '/command/a%2Bb']:
+            self.assertIn(b'Literal plus', server.request(path)[2])
+        for path in ['/assets/a+b.txt', '/assets/a%2Bb.txt']:
+            self.assertEqual(server.request(path)[2], b'literal plus')
+        status, headers, _ = server.request('/index?value=%00')
+        self.assertEqual(status, 301)
+        self.assertEqual(headers['location'], '/?value=%00')
 
     def test_methods(self):
         server = self.start()

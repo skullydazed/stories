@@ -7,6 +7,7 @@
 #include <civetweb.h>
 #include <errno.h>
 #include <fcntl.h>
+#include <limits.h>
 #include <pthread.h>
 #include <signal.h>
 #include <stdio.h>
@@ -18,6 +19,8 @@
 struct server
 {
 	const struct configuration *configuration;
+	const char                 *asset_root;
+	const char                 *application_root;
 	int                         content_fd;
 	struct mg_context          *context;
 };
@@ -101,6 +104,27 @@ static int send_error(struct mg_connection *connection, const struct configurati
 	return result;
 }
 
+static int send_encoded_asset(struct mg_connection *connection, const struct server *server, const char *path)
+{
+	bool          operator_asset = !strncmp(path, "/assets/", 8);
+	struct buffer filename;
+	buffer_init(&filename, STORIES_PATH_LIMIT - 1);
+	buffer_puts(&filename, operator_asset ? server->asset_root : server->application_root);
+	buffer_puts(&filename, "/");
+	buffer_puts(&filename, path + (operator_asset ? 8 : 10));
+	if (filename.failed)
+	{
+		buffer_free(&filename);
+		return send_error(connection, server->configuration, 400, "Bad Request", "Asset path is too long.");
+	}
+	/* Automatic URI decoding is disabled so embedded NULs cannot truncate a
+	 * request before validation. For encoded assets, give the validated filename
+	 * to CivetWeb directly; it still owns MIME, ranges, caching, and HEAD handling. */
+	mg_send_mime_file(connection, filename.data, NULL);
+	buffer_free(&filename);
+	return 1;
+}
+
 static int request_begin(struct mg_connection *connection)
 {
 	const struct mg_request_info *request = mg_get_request_info(connection);
@@ -109,21 +133,29 @@ static int request_begin(struct mg_connection *connection)
 	if (strcmp(request->request_method, "GET") && strcmp(request->request_method, "HEAD"))
 		return send_error(connection, configuration, 405, "Method Not Allowed", "Use GET or HEAD.");
 
-	/* local_uri_raw is decoded by CivetWeb but has not had dot segments removed.
-	 * Validate that representation, rather than decoding it again or trusting the
-	 * cleaned local_uri, so traversal cannot silently select a different route. */
-	const char *path = request->local_uri_raw;
-	if (!path || !url_path_valid(path, strlen(path)))
+	/* Preserve the original encoded path with decode_url=no. CivetWeb's default
+	 * in-place decoding inserts NULs into request_uri/local_uri_raw before this
+	 * callback; strlen on those strings would hide the rest of a hostile path.
+	 * Validate the decoder's full byte count before using any decoded C string.
+	 * The final argument is zero because URL paths are not form-encoded data. */
+	const char *encoded_path = request->local_uri_raw;
+	if (!encoded_path)
 		return send_error(connection, configuration, 400, "Bad Request", "Invalid document path.");
-	if (url_markdown_extension(path, strlen(path)))
+	size_t encoded_size = strlen(encoded_path);
+	char   path[STORIES_PATH_LIMIT];
+	int    decoded_size = encoded_size > INT_MAX ? -1 : mg_url_decode(encoded_path, (int)encoded_size, path, (int)sizeof(path), 0);
+	if (decoded_size < 0 || !url_path_valid(path, (size_t)decoded_size))
+		return send_error(connection, configuration, 400, "Bad Request", "Invalid document path.");
+	size_t path_size = (size_t)decoded_size;
+	if (url_markdown_extension(path, path_size))
 		return send_error(connection, configuration, 404, "Not Found", "No document exists at this URL.");
 	if (!strncmp(path, "/assets/", 8) || !strncmp(path, "/_stories/", 10))
-		return 0;
+		return !strcmp(encoded_path, path) ? 0 : send_encoded_asset(connection, server, path);
 	if (!strcmp(path, "/assets") || !strcmp(path, "/_stories"))
 		return send_error(connection, configuration, 404, "Not Found", "No document exists at this URL.");
 
 	struct document_route route;
-	document_resolve(server->content_fd, configuration, path, strlen(path), &route);
+	document_resolve(server->content_fd, configuration, path, path_size, &route);
 	int result;
 	if (route.status == ROUTE_REDIRECT)
 	{
@@ -231,6 +263,9 @@ int server_run(const struct configuration *configuration)
 	buffer_puts(&rewrites, "/");
 	if (rewrites.failed)
 		goto done;
+	/* These startup buffers outlive every request and remain immutable until mg_stop. */
+	server.asset_root = assets;
+	server.application_root = application;
 	server.content_fd = open(content, O_RDONLY | O_DIRECTORY | O_CLOEXEC | O_NOFOLLOW);
 	if (server.content_fd < 0)
 	{
@@ -275,6 +310,10 @@ int server_run(const struct configuration *configuration)
 		"5000",
 		"max_request_size",
 		"16384",
+		"decode_url",
+		"no",
+		"decode_query_string",
+		"no",
 		"static_file_max_age",
 		"0",
 	};
