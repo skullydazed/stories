@@ -1,0 +1,6 @@
+[content]
+root=docs
+[assets]
+root=assets
+[site]
+title=badvalue

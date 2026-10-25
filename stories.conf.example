@@ -20,4 +20,5 @@ Commands = /command/
 Functions = /function/
 
 [assets]
-root = site-assets
+# Includes pico.min.css, served at /assets/pico.min.css.
+root = assets

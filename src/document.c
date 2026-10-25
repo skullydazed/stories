@@ -10,7 +10,8 @@
 
 static bool missing_error(int error)
 {
-	return error == ENOENT || error == ENOTDIR || error == ELOOP || error == EACCES;
+	/* O_NOFOLLOW reports EMLINK on FreeBSD and ELOOP on Linux/macOS. */
+	return error == ENOENT || error == ENOTDIR || error == ELOOP || error == EMLINK || error == EACCES;
 }
 
 /* Walk each component with O_NOFOLLOW. Resolving a string with realpath and
@@ -24,7 +25,8 @@ static int open_document(int root_fd, const char *path)
 		return -1;
 	}
 	strcpy(copy, path);
-	int parent = dup(root_fd);
+	/* Set close-on-exec atomically, without a dup/fcntl window between workers. */
+	int parent = fcntl(root_fd, F_DUPFD_CLOEXEC, 0);
 	if (parent < 0)
 		return -1;
 	char *component = copy;
@@ -95,7 +97,7 @@ void document_resolve(int root_fd, const struct configuration *configuration, co
 		route->status = ROUTE_INVALID;
 		return;
 	}
-	if (url_markdown_extension(path, size))
+	if (url_path_has_extension(path, size))
 		return;
 	memcpy(relative, path + 1, size - 1);
 	relative[size - 1] = '\0';

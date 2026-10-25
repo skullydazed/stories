@@ -54,11 +54,11 @@ The server stays in the foreground. SIGINT and SIGTERM stop the listener and wor
 
 When `command/index.md` exists, `/command` and `/command/index` redirect to `/command/` with 301. `/index` redirects to `/`. A directory without `index.md` returns 404. Stories never generates directory listings, navigation trees, search results, or disambiguation pages. Navigation links must point to documents that you author.
 
-Requests ending in `.md` or `.MD` return 404 throughout the server, including asset routes. Markdown source and legacy `.txt` files are not exposed as static content. Direct file and index resolution takes precedence over legacy-name lookup.
+Document URLs must be extensionless: a dot in the final path component returns 404, even if a backing file such as `time.html.md` exists. The same rule applies to directory index URLs. CSS, image, and other static asset URLs may retain extensions under `/assets/`. Requests ending in `.md` or `.MD` return 404 throughout the server, including asset routes. Markdown source and legacy `.txt` files in the content root are not exposed as static content. Direct file and index resolution takes precedence over legacy-name lookup.
 
 For unqualified legacy names, Stories searches `resolution_order` and redirects the first matching document with 301. For example, `/time` redirects to `/disambiguation/time` when that directory comes first and contains `time.md`.
 
-A qualified name such as `/time_command` selects `command/time.md` and redirects to `/command/time`. A recognized suffix is authoritative: if the target is missing, the response is 404. Suffixes are literal configured directory names; Stories does not singularize words. If directory names contain underscores, the longest matching suffix wins. Resolution directories are unique top-level names, not nested paths; `assets` and `_stories` are reserved.
+A qualified name such as `/time_command` selects `command/time.md` and redirects to `/command/time`. A recognized suffix is authoritative: if the target is missing, the response is 404. Suffixes are literal configured directory names; Stories does not singularize words. If directory names contain underscores, the longest matching suffix wins. Resolution directories are unique top-level names, not nested paths; `assets` is reserved.
 
 For EPIC, normalize directory names to singular and use:
 
@@ -66,13 +66,15 @@ For EPIC, normalize directory names to singular and use:
 resolution_order = disambiguation, command, function, on, ctcp, set, window, script, special
 ```
 
-Markdown supports CommonMark plus tables, strikethrough, task lists, and automatic links. Stories rewrites inline and reference-style links to local `.md` documents. For example, `../function/time.md?q=x#details` in `command/time.md` becomes `/function/time?q=x#details`, and `index.md` becomes `/command/`. Rewriting does not require the destination to exist. Attempts to escape above the content root or malformed local destinations fail rendering.
+Markdown supports CommonMark plus tables, strikethrough, task lists, and automatic links. Stories rewrites inline and reference-style links to local `.md` documents, including percent-encoded `.md` suffixes. For example, `../function/time.md?q=x#details` in `command/time.md` becomes `/function/time?q=x#details`, and `index.md` becomes `/command/`. Rewriting does not require the destination to exist. Invalid Markdown destinations, root escapes, and targets that cannot map to extensionless document URLs fail rendering. Other link destinations pass through unchanged, including extensionless links such as `deals%` and asset URLs. Passing a link through does not make its target a supported document route.
 
 External destinations, fragment-only links, image destinations, and embedded HTML remain as authored. Raw HTML is trusted and passes through, including active content; use valid extensionless URLs in its links. Heading IDs are not synthesized. Publishing is restricted to trusted maintainers.
 
+The page title uses the first Markdown heading at any level, followed by the configured site title. Inline formatting is reduced to text, entities are decoded, and the result is escaped for HTML. If the heading is absent or empty, the extensionless document basename is used instead.
+
 ## Configuration
 
-The INI grammar has named sections and one `key = value` entry per line. Leading/trailing spaces and tabs are trimmed. Empty lines and whole-line `#` or `;` comments are ignored. Values are literal: there is no quoting, escaping, interpolation, or inline-comment syntax. NUL/control bytes, unknown sections/settings, duplicate scalar settings, and duplicate navigation labels are rejected. Configuration files are limited to 1 MiB.
+The INI grammar has named sections and one `key = value` entry per line. Leading/trailing spaces and tabs are trimmed. Empty lines and whole-line `#` or `;` comments are ignored. Values are literal: there is no quoting, escaping, interpolation, or inline-comment syntax. ASCII control bytes, including NUL and DEL, are rejected except for tabs and CR/LF used by the grammar. Unknown sections/settings, duplicate scalar settings, and duplicate navigation labels are rejected. Diagnostics identify the file, line, section, and setting where applicable, with the reason for rejection. Configuration files are limited to 1 MiB.
 
 | Setting | Default or requirement |
 | --- | --- |
@@ -90,9 +92,9 @@ Document limits must be positive and at most 1 GiB each. Exceeding either produc
 
 ## Static assets and HTTP
 
-`/assets/...` maps to the configured asset root. `/_stories/...` maps to installed application assets, including Pico CSS. Unencoded asset paths fall through to CivetWeb; encoded paths are decoded and validated before their filenames are passed to CivetWeb's file-serving API. CivetWeb handles static MIME types, HEAD, and byte ranges in both cases. Its error callback uses Stories' shared shell and response helper so errors also respect HEAD semantics. Static responses default to zero cache lifetime; configure caching at the reverse proxy.
+`/assets/...` maps only to the configured asset root. The page shell references `/assets/pico.min.css`, an ordinary file in that root. The example configuration points to the checkout's `assets/` directory, which includes the stylesheet. If you configure a different root, place the stylesheet there; the server does not search installed or source-tree fallback directories. Unencoded asset paths fall through to CivetWeb; encoded paths are decoded and validated before their filenames are passed to CivetWeb's file-serving API. CivetWeb handles static MIME types, HEAD, and byte ranges in both cases. Its error callback uses Stories' shared shell and response helper so errors also respect HEAD semantics. Static responses default to zero cache lifetime; configure caching at the reverse proxy.
 
-Directory listings, CGI, SSI, and compiled-in script recognizers are disabled. Static trees are deliberately public and operator-managed; CivetWeb's normal static-file and symlink behavior applies. Keep private files and symlinks to private trees out of them. Markdown access separately rejects symlinks at every component using descriptor-relative opens.
+Static HTML and XHTML files return 404, using CivetWeb's MIME classification to enforce the same policy for encoded and unencoded paths. Implicit static index files, directory listings, CGI, SSI, and compiled-in script recognizers are disabled. Static trees are deliberately public and operator-managed; CivetWeb's normal static-file and symlink behavior otherwise applies. Keep private files and symlinks to private trees out of them. Markdown access separately rejects symlinks at every component using descriptor-relative opens.
 
 Stories completes all document responses, so missing documents never fall through to static serving. GET and HEAD are supported; other methods return 405 with `Allow: GET, HEAD`. Invalid paths return 400, missing documents 404, and filesystem/rendering failures 500. Dotfiles, dot segments, backslashes, and repeated separators are rejected. Automatic URI decoding is disabled; the HTTP adapter uses CivetWeb's decoder once and validates its full returned byte count, including embedded NULs. The resolver never decodes again. Queries remain opaque.
 
@@ -104,7 +106,7 @@ meson compile -C build-release
 meson install -C build-release
 ```
 
-Meson installs the binary, Pico stylesheet and license, example configuration, and project license. It does not install or overwrite `/etc/stories.conf`, create deployment roots, start services, or publish content. Installed application assets take precedence; an uninstalled development binary can use the checkout's `assets/` directory.
+Meson installs the binary, Pico stylesheet and license, example configuration, and project license. The stylesheet is installed under `/usr/local/share/stories/assets` with the prefix above. Configure `[assets] root` to that directory or copy the stylesheet into your chosen asset root. Installation does not overwrite `/etc/stories.conf`, create deployment roots, or start services. The server serves only the explicitly configured asset root.
 
 Run as an unprivileged account with read access to content and public assets. See [examples/stories.freebsd](examples/stories.freebsd) for rc.d supervision and [examples/nginx.conf](examples/nginx.conf) for TLS and caching. Adjust paths, ownership, hostname, certificates, and cache directories. Proxy caching can delay content updates and permanent redirect changes.
 

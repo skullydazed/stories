@@ -1,5 +1,4 @@
 #include "server.h"
-#include "build_config.h"
 #include "document.h"
 #include "render.h"
 #include "url.h"
@@ -20,7 +19,6 @@ struct server
 {
 	const struct configuration *configuration;
 	const char                 *asset_root;
-	const char                 *application_root;
 	int                         content_fd;
 	struct mg_context          *context;
 };
@@ -106,12 +104,11 @@ static int send_error(struct mg_connection *connection, const struct configurati
 
 static int send_encoded_asset(struct mg_connection *connection, const struct server *server, const char *path)
 {
-	bool          operator_asset = !strncmp(path, "/assets/", 8);
 	struct buffer filename;
 	buffer_init(&filename, STORIES_PATH_LIMIT - 1);
-	buffer_puts(&filename, operator_asset ? server->asset_root : server->application_root);
+	buffer_puts(&filename, server->asset_root);
 	buffer_puts(&filename, "/");
-	buffer_puts(&filename, path + (operator_asset ? 8 : 10));
+	buffer_puts(&filename, path + 8);
 	if (filename.failed)
 	{
 		buffer_free(&filename);
@@ -147,11 +144,19 @@ static int request_begin(struct mg_connection *connection)
 	if (decoded_size < 0 || !url_path_valid(path, (size_t)decoded_size))
 		return send_error(connection, configuration, 400, "Bad Request", "Invalid document path.");
 	size_t path_size = (size_t)decoded_size;
-	if (url_markdown_extension(path, path_size))
+	bool   asset = !strncmp(path, "/assets/", 8);
+	if (url_markdown_extension(path, path_size) || (!asset && url_path_has_extension(path, path_size)))
 		return send_error(connection, configuration, 404, "Not Found", "No document exists at this URL.");
-	if (!strncmp(path, "/assets/", 8) || !strncmp(path, "/_stories/", 10))
+	if (asset)
+	{
+		/* Match CivetWeb's own MIME classification before an asset can
+		 * serve a file. HTML pages belong to the Markdown renderer. */
+		const char *mime = mg_get_builtin_mime_type(path);
+		if (!strcmp(mime, "text/html") || !strcmp(mime, "application/xhtml+xml"))
+			return send_error(connection, configuration, 404, "Not Found", "No document exists at this URL.");
 		return !strcmp(encoded_path, path) ? 0 : send_encoded_asset(connection, server, path);
-	if (!strcmp(path, "/assets") || !strcmp(path, "/_stories"))
+	}
+	if (!strcmp(path, "/assets"))
 		return send_error(connection, configuration, 404, "Not Found", "No document exists at this URL.");
 
 	struct document_route route;
@@ -226,7 +231,7 @@ static int http_error(struct mg_connection *connection, int status, const char *
 int server_run(const struct configuration *configuration)
 {
 	struct server server = {.configuration = configuration, .content_fd = -1};
-	char          content[STORIES_PATH_LIMIT], assets[STORIES_PATH_LIMIT], application[STORIES_PATH_LIMIT];
+	char          content[STORIES_PATH_LIMIT], assets[STORIES_PATH_LIMIT];
 	char          error[512], threads[32];
 	struct buffer rewrites;
 	bool          initialized = false;
@@ -239,33 +244,18 @@ int server_run(const struct configuration *configuration)
 		fprintf(stderr, "%s\n", error);
 		goto done;
 	}
-	/* Installed data wins. The source-tree fallback permits running an uninstalled
-	 * development build; installed deployments do not depend on the checkout. */
-	if (!realpath(STORIES_ASSET_DIR, application) && !realpath(STORIES_SOURCE_ASSET_DIR, application))
-	{
-		fprintf(stderr, "cannot locate application assets\n");
-		goto done;
-	}
-	if (path_contains(application, content) || path_contains(content, application))
-	{
-		fprintf(stderr, "application assets and Markdown roots must not overlap\n");
-		goto done;
-	}
-	if (strchr(assets, ',') || strchr(assets, '=') || strchr(application, ',') || strchr(application, '='))
+	if (strchr(assets, ',') || strchr(assets, '='))
 	{
 		fprintf(stderr, "asset paths cannot contain comma or equals (CivetWeb rewrite delimiters)\n");
 		goto done;
 	}
 	buffer_puts(&rewrites, "/assets/=");
 	buffer_puts(&rewrites, assets);
-	buffer_puts(&rewrites, "/,/_stories/=");
-	buffer_puts(&rewrites, application);
 	buffer_puts(&rewrites, "/");
 	if (rewrites.failed)
 		goto done;
-	/* These startup buffers outlive every request and remain immutable until mg_stop. */
+	/* This startup buffer outlives every request and remains immutable until mg_stop. */
 	server.asset_root = assets;
-	server.application_root = application;
 	server.content_fd = open(content, O_RDONLY | O_DIRECTORY | O_CLOEXEC | O_NOFOLLOW);
 	if (server.content_fd < 0)
 	{
@@ -299,11 +289,13 @@ int server_run(const struct configuration *configuration)
 		"num_threads",
 		threads,
 		"document_root",
-		application,
+		assets,
 		"url_rewrite_patterns",
 		rewrites.data,
 		"enable_directory_listing",
 		"no",
+		"index_files",
+		"",
 		"enable_keep_alive",
 		"no",
 		"request_timeout_ms",

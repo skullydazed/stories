@@ -96,6 +96,7 @@ class HttpTests(unittest.TestCase):
         self.assets = self.root / 'assets'
         shutil.copytree(FIXTURES, self.content)
         self.assets.mkdir()
+        shutil.copyfile(FIXTURES.parent.parent / 'assets' / 'pico.min.css', self.assets / 'pico.min.css')
         (self.assets / 'sample.txt').write_text('asset bytes\n')
         (self.content / 'private.txt').write_text('must not leak')
         self.config = self.root / 'stories.conf'
@@ -132,6 +133,8 @@ class HttpTests(unittest.TestCase):
         self.assertEqual(server.request('/missing')[0], 404)
 
     def test_index_rules_and_source_extensions(self):
+        for extension in ['html', 'txt', 'css']:
+            (self.content / 'command' / f'time.{extension}.md').write_text('# Not a public document URL\n')
         server = self.start()
         for path in ['/', '/command/', '/command/time']:
             with self.subTest(path=path):
@@ -141,13 +144,13 @@ class HttpTests(unittest.TestCase):
                 status, headers, _ = server.request(path)
                 self.assertEqual(status, 301)
                 self.assertEqual(headers['location'], target)
-        for path in ['/function/', '/command/time/', '/command/time.md', '/command/time.MD', '/index.md', '/private.txt', '/assets/sample.md', '/assets', '/_stories']:
+        for path in ['/function/', '/command/time/', '/command/time.md', '/command/time.MD', '/command/time.html', '/command/time.txt', '/command/time.css', '/command/time%2ehtml', '/time.html_command', '/index.md', '/private.txt', '/assets/sample.md', '/assets']:
             with self.subTest(path=path):
                 self.assertEqual(server.request(path)[0], 404)
 
     def test_head_parity_and_no_wire_body(self):
         server = self.start()
-        for path in ['/', '/command/time', '/time', '/missing', '/function/', '/assets/sample.txt', '/assets/sam%70le.txt', '/%61ssets/sample.txt', '/assets/missing', '/assets/miss%69ng', '/_stories/pico.min.css', '/_stories/%70ico.min.css']:
+        for path in ['/', '/command/time', '/time', '/missing', '/function/', '/assets/sample.txt', '/assets/sam%70le.txt', '/%61ssets/sample.txt', '/assets/missing', '/assets/miss%69ng', '/assets/pico.min.css', '/assets/%70ico.min.css']:
             with self.subTest(path=path):
                 get_status, get_headers, get_body = server.request(path)
                 head_status, head_headers, head_body = server.request(path, 'HEAD')
@@ -171,6 +174,25 @@ class HttpTests(unittest.TestCase):
         self.assertIn(b'<a href="unchanged.md">', body)
         self.assertIn(b'src="/assets/image.png"', body)
 
+    def test_page_title_uses_the_first_markdown_heading(self):
+        document = self.content / 'command' / 'title.md'
+        server = self.start()
+        cases = [
+            ('## First *heading* &amp; `code`\n\n# Later heading\n', 'First heading &amp; code'),
+            ('Setext heading\n==============\n', 'Setext heading'),
+            ('# `</title><script>bad</script>`\n', '&lt;/title&gt;&lt;script&gt;bad&lt;/script&gt;'),
+            ('Body without a heading.\n', 'title'),
+        ]
+        for markdown, title in cases:
+            with self.subTest(markdown=markdown):
+                document.write_text(markdown)
+                status, _, body = server.request('/command/title')
+                self.assertEqual(status, 200)
+                self.assertIn(f'<title>{title} — HTTP Test</title>'.encode(), body)
+                status, headers, body = server.request('/command/title', 'HEAD')
+                self.assertEqual(status, 200)
+                self.assertEqual(body, b'')
+
     def test_civetweb_static_files_and_ranges(self):
         (self.assets / 'sample.cgi').write_text('#!/bin/sh\nprintf should-not-execute\n')
         (self.assets / 'a b.txt').write_text('space filename')
@@ -192,8 +214,47 @@ class HttpTests(unittest.TestCase):
         self.assertEqual(server.request('/assets/sample.cgi')[2], b'#!/bin/sh\nprintf should-not-execute\n')
         self.assertEqual(server.request('/assets/missing')[0], 404)
         self.assertNotEqual(server.request('/assets/')[0], 200)
-        self.assertEqual(server.request('/_stories/pico.min.css')[0], 200)
+        self.assertEqual(server.request('/assets/pico.min.css')[0], 200)
+        self.assertEqual(server.request('/_stories/pico.min.css')[0], 404)
         self.assertEqual(server.request('/pico.min.css')[0], 404)
+
+    def test_static_html_and_implicit_indexes_are_not_served(self):
+        for name in ['page.html', 'page.HTML', 'page.htm', 'page.xhtml', 'page.shtml']:
+            (self.assets / name).write_text('<h1>Static HTML must not be served</h1>')
+        (self.assets / 'nested').mkdir()
+        (self.assets / 'nested' / 'index.html').write_text('<h1>Static HTML index must not be served</h1>')
+        (self.assets / 'styles.css').write_text('body { color: black; }')
+        (self.assets / 'image.png').write_bytes(b'\x89PNG\r\n\x1a\n')
+        server = self.start()
+        paths = ['/assets/page.html', '/assets/page.HTML', '/assets/page.htm', '/assets/page.xhtml', '/assets/page.shtml', '/assets/page%2ehtml', '/%61ssets/page.html', '/assets/nested/index.html']
+        for path in paths:
+            for method in ['GET', 'HEAD']:
+                with self.subTest(path=path, method=method):
+                    status, _, body = server.request(path, method)
+                    self.assertEqual(status, 404)
+                    self.assertNotIn(b'Static HTML must not be served', body)
+        status, _, body = server.request('/assets/nested/')
+        self.assertNotEqual(status, 200)
+        self.assertNotIn(b'Static HTML index must not be served', body)
+        for path in ['/assets/styles.css', '/assets/image.png', '/assets/pico.min.css']:
+            with self.subTest(path=path):
+                self.assertEqual(server.request(path)[0], 200)
+
+    def test_stylesheet_uses_only_the_configured_asset_root(self):
+        (self.assets / 'pico.min.css').write_text('/* configured stylesheet */')
+        server = self.start()
+        status, _, body = server.request('/')
+        self.assertEqual(status, 200)
+        self.assertIn(b'href="/assets/pico.min.css"', body)
+        self.assertNotIn(b'/_stories/', body)
+        self.assertEqual(server.request('/assets/pico.min.css')[2], b'/* configured stylesheet */')
+        self.assertEqual(server.request('/_stories/pico.min.css')[0], 404)
+        (self.assets / 'pico.min.css').unlink()
+        self.assertEqual(server.request('/assets/pico.min.css')[0], 404)
+        server.stop()
+        server = self.start()
+        self.assertEqual(server.request('/')[0], 200)
+        self.assertEqual(server.request('/assets/pico.min.css')[0], 404)
 
     def test_invalid_paths_and_filesystem_boundary(self):
         outside = self.root / 'secret.md'
@@ -202,7 +263,13 @@ class HttpTests(unittest.TestCase):
         (self.content / 'shortcut').symlink_to(self.content / 'command', target_is_directory=True)
         os.mkfifo(self.content / 'fifo.md')
         server = self.start()
-        for path in ['/link', '/shortcut/time', '/fifo', '/private.txt', '/assets/../content/index.md', '/assets/%2e%2e/secret', '/command/../index', '/command//time', '/.hidden', '/assets/.hidden']:
+        for path in ['/link', '/shortcut', '/shortcut/', '/shortcut/time']:
+            for method in ['GET', 'HEAD']:
+                with self.subTest(path=path, method=method):
+                    status, _, body = server.request(path, method)
+                    self.assertEqual(status, 404)
+                    self.assertNotIn(b'outside secret', body)
+        for path in ['/fifo', '/private.txt', '/assets/../content/index.md', '/assets/%2e%2e/secret', '/command/../index', '/command//time', '/.hidden', '/assets/.hidden']:
             with self.subTest(path=path):
                 status, _, body = server.request(path)
                 self.assertIn(status, [400, 404])
@@ -212,7 +279,7 @@ class HttpTests(unittest.TestCase):
 
     def test_encoded_nul_paths_are_rejected(self):
         server = self.start()
-        paths = ['/%00', '/index%00junk', '/command/time%00.md', '/time%00_command', '/assets/sample.txt%00junk', '/_stories/pico.min.css%00junk', '/assets/%00/sample.txt']
+        paths = ['/%00', '/index%00junk', '/command/time%00.md', '/time%00_command', '/assets/sample.txt%00junk', '/assets/pico.min.css%00junk', '/assets/%00/sample.txt']
         for path in paths:
             for method in ['GET', 'HEAD']:
                 with self.subTest(path=path, method=method):
@@ -280,6 +347,43 @@ class HttpTests(unittest.TestCase):
         self.assertEqual(server.raw('HEAD', '/expanded')[1], b'')
         self.assertEqual(server.request('/command/time')[0], 200)
 
+    def test_failed_links_do_not_send_partial_documents(self):
+        document = self.content / 'command' / 'failed-links.md'
+        server = self.start()
+        cases = ['before [x](../../outside.md) after', 'before [a](%GG.md) after', 'before [reference][target] after\n\n[target]: ../../outside.md\n', 'before [bad](file%00.md) after']
+        for markdown in cases:
+            with self.subTest(markdown=markdown):
+                document.write_text(markdown)
+                status, headers, body = server.request('/command/failed-links')
+                self.assertEqual(status, 500)
+                self.assertEqual(int(headers['content-length']), len(body))
+                self.assertIn(b'Internal Server Error', body)
+                self.assertNotIn(b'before ', body)
+                self.assertNotIn(b' after', body)
+                self.assertTrue(body.endswith(b'</html>\n'))
+                status, head_headers, body = server.request('/command/failed-links', 'HEAD')
+                self.assertEqual(status, 500)
+                self.assertEqual(head_headers['content-length'], headers['content-length'])
+                self.assertEqual(body, b'')
+                wire_headers, wire_body = server.raw('HEAD', '/command/failed-links')
+                self.assertIn(b' 500 ', wire_headers.split(b'\r\n', 1)[0])
+                self.assertEqual(wire_body, b'')
+        document.write_text('[100%](x)')
+        status, _, body = server.request('/command/failed-links')
+        self.assertEqual(status, 200)
+        self.assertIn(b'<a href="x">100%</a>', body)
+
+    def test_non_markdown_links_with_stray_percent(self):
+        (self.content / 'command' / 'discounts.md').write_text('[50% off](deals%)\n\n[bad escape](deals%GG?next=time.md#discount)\n\n[reference][sale]\n\n[markdown](time%2e%6d%64)\n\n[sale]: deals%\n')
+        server = self.start()
+        status, _, body = server.request('/command/discounts')
+        self.assertEqual(status, 200)
+        self.assertIn(b'<a href="deals%">50% off</a>', body)
+        self.assertIn(b'<a href="deals%GG?next=time.md#discount">bad escape</a>', body)
+        self.assertIn(b'<a href="deals%">reference</a>', body)
+        self.assertIn(b'<a href="/command/time">markdown</a>', body)
+        self.assertTrue(body.endswith(b'</html>\n'))
+
     def test_shutdown_under_load(self):
         server = self.start()
         completed = threading.Event()
@@ -317,6 +421,25 @@ class HttpTests(unittest.TestCase):
         self.config.write_text('[unknown]\nbad=true\n')
         result = subprocess.run([str(BINARY), '--check-config'], cwd=self.root, capture_output=True, text=True)
         self.assertNotEqual(result.returncode, 0)
+
+    def test_configuration_diagnostics_and_del(self):
+        self.write_config()
+        valid = self.config.read_text()
+        cases = [
+            (valid.replace('threads=4', 'threads=many'), 'line 3: [server] threads: expected an integer'),
+            (valid.replace('threads=4', 'threds=4'), 'line 3: [server] threds: unknown setting'),
+            (valid.replace('[assets]', '[asset]'), 'line 9: [asset]: unknown section'),
+            (valid.replace('title=HTTP Test', 'title='), 'line 12: [site] title: value must not be empty'),
+            (valid.replace('title=HTTP Test', 'title=HTTP\x7fTest'), 'line 12: disallowed control byte 0x7F'),
+            (valid.replace('[assets]\nroot=assets\n', ''), 'missing required setting [assets] root'),
+        ]
+        for contents, diagnostic in cases:
+            with self.subTest(diagnostic=diagnostic):
+                self.config.write_text(contents)
+                result = subprocess.run([str(BINARY), '--config', str(self.config), '--check-config'], capture_output=True, text=True, timeout=5)
+                self.assertNotEqual(result.returncode, 0)
+                self.assertIn(f'{self.config}: ', result.stderr)
+                self.assertIn(diagnostic, result.stderr)
 
     def test_failed_startup_and_root_overlap(self):
         self.write_config()

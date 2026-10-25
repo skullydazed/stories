@@ -103,6 +103,61 @@ static void test_configuration_parser(void)
 	free(oversize);
 }
 
+static void test_configuration_diagnostics(void)
+{
+	static const struct
+	{
+		const char *input;
+		const char *diagnostic;
+	} cases[] = {
+		{"[server]\nthreads=0\n", "line 2: [server] threads: expected an integer from 1 to 1024"},
+		{"[server]\nthreads=8\nthreads=4\n", "line 3: [server] threads: duplicate setting"},
+		{"[server]\nthreds=8\n", "line 2: [server] threds: unknown setting"},
+		{"[server]\nlisten=localhost:8080\n", "line 2: [server] listen: expected a numeric IPv4 or bracketed IPv6 address and port"},
+		{"[unknown]\n", "line 1: [unknown]: unknown section"},
+		{"[server\n", "line 1: expected a section header"},
+		{"[server]\nthreads\n", "line 2: [server]: expected key = value"},
+		{"threads=4\n", "line 1: setting appears before a section header"},
+		{"[site]\n=value\n", "line 2: [site]: setting name must not be empty"},
+		{"[site]\ntitle=\n", "line 2: [site] title: value must not be empty"},
+		{"[assets]\nroot=a,b\n", "line 2: [assets] root: path must not contain ',' or '='"},
+		{"[content]\nresolution_order=command,,function\n", "line 2: [content] resolution_order: directory names must not be empty"},
+		{"[content]\nresolution_order=command,command\n", "line 2: [content] resolution_order: duplicate directory"},
+		{"[content]\nresolution_order=assets\n", "line 2: [content] resolution_order: directory name 'assets' is reserved"},
+		{"[content]\noutput_limit=-1\n", "line 2: [content] output_limit: expected a byte limit"},
+		{"[navigation]\nHome=//example.org\n", "line 2: [navigation] Home: URL must be a local path"},
+		{"[navigation]\nHome=/\nHome=/other\n", "line 3: [navigation] Home: duplicate navigation label"},
+		{"", "missing required setting [content] root"},
+		{"[content]\nroot=docs\n", "missing required setting [assets] root"},
+	};
+	struct configuration configuration;
+	char                 error[512];
+	for (size_t i = 0; i < sizeof(cases) / sizeof(cases[0]); i++)
+	{
+		CHECK(!configuration_parse(cases[i].input, strlen(cases[i].input), "/tmp", &configuration, error, sizeof(error)));
+		CHECK(strstr(error, cases[i].diagnostic));
+		CHECK(!configuration.listen && !configuration.content_root && !configuration.asset_root);
+		configuration_free(&configuration);
+	}
+	char  control[] = "[content]\nroot=docs\n[assets]\nroot=assets\n[site]\ntitle=before?after\n";
+	char *marker = strchr(control, '?');
+	CHECK(marker);
+	for (unsigned byte = 0; byte <= 127; byte++)
+	{
+		if (!((byte < 32 && byte != '\n' && byte != '\r' && byte != '\t') || byte == 127))
+			continue;
+		*marker = (char)byte;
+		CHECK(!configuration_parse(control, sizeof(control) - 1, "/tmp", &configuration, error, sizeof(error)));
+		char diagnostic[80];
+		snprintf(diagnostic, sizeof(diagnostic), "line 6: disallowed control byte 0x%02X", byte);
+		CHECK(strstr(error, diagnostic));
+		configuration_free(&configuration);
+	}
+	const char *valid = "[content]\r\nroot = docs\r\n[assets]\r\nroot = assets\r\n[site]\r\ntitle = Tab\tvalue\r\n";
+	CHECK(configuration_parse(valid, strlen(valid), "/tmp", &configuration, error, sizeof(error)));
+	configuration_free(&configuration);
+}
+
 static void test_links(void)
 {
 	static const struct
@@ -120,6 +175,12 @@ static void test_links(void)
 		{"a%20b.md", "command/time.md", "/command/a%20b"},
 		{"a%2Bb.md", "command/time.md", "/command/a%2Bb"},
 		{"time%2emd#x", "command/plain.md", "/command/time#x"},
+		{"time.%6d%64#x", "command/plain.md", "/command/time#x"},
+		{"time%2e%6d%64#x", "command/plain.md", "/command/time#x"},
+		{"deals%", "command/time.md", "deals%"},
+		{"deals%GG", "command/time.md", "deals%GG"},
+		{"deals%?next=time.md#discount", "command/time.md", "deals%?next=time.md#discount"},
+		{"/assets/sale%.png", "command/time.md", "/assets/sale%.png"},
 		{"https://example.org/readme.md?q=x", "index.md", "https://example.org/readme.md?q=x"},
 		{"//example.org/readme.md", "index.md", "//example.org/readme.md"},
 		{"mailto:person@example.org", "index.md", "mailto:person@example.org"},
@@ -135,7 +196,7 @@ static void test_links(void)
 		CHECK(!strcmp(output.data, cases[i].expected));
 		buffer_free(&output);
 	}
-	const char *bad[] = {"../../outside.md", "file%00.md", "%GG.md", "file\\name.md", "file\n.md"};
+	const char *bad[] = {"../../outside.md", "file%00.md", "%GG.md", "file\\name.md", "file\n.md", "deals%%2e%6d%64", "file.html.md", "file.css.md"};
 	for (size_t i = 0; i < sizeof(bad) / sizeof(bad[0]); i++)
 	{
 		struct buffer output;
@@ -149,6 +210,10 @@ static void test_links(void)
 	CHECK(!url_path_valid("/abc\0hidden", 11));
 	CHECK(url_path_valid("/command/time", 13));
 	CHECK(url_path_valid("/command/", 9));
+	CHECK(!url_path_has_extension("/command/time", strlen("/command/time")));
+	CHECK(!url_path_has_extension("/command/", strlen("/command/")));
+	CHECK(url_path_has_extension("/command/time.html", strlen("/command/time.html")));
+	CHECK(url_path_has_extension("/command.html/", strlen("/command.html/")));
 }
 
 static void write_configuration(const char *path, const char *title)
@@ -222,6 +287,8 @@ static void test_resolver(void)
 		{"/command/", ROUTE_DOCUMENT, "command/index.md", "/command/"},
 		{"/function/", ROUTE_MISSING, "", ""},
 		{"/command/time.md", ROUTE_MISSING, "", ""},
+		{"/command/time.html", ROUTE_MISSING, "", ""},
+		{"/command/time.txt", ROUTE_MISSING, "", ""},
 		{"/missing", ROUTE_MISSING, "", ""},
 		{"/command/../index", ROUTE_INVALID, "", ""},
 	};
@@ -256,6 +323,22 @@ static void test_renderer(void)
 	for (size_t i = 0; i < sizeof(expected) / sizeof(expected[0]); i++)
 		CHECK(strstr(output.data, expected[i]));
 	buffer_free(&output);
+	const char *invalid_links[] = {
+		"before [x](../../outside.md) after",
+		"before [a](%GG.md) after",
+		"before [reference][target] after\n\n[target]: ../../outside.md\n",
+		"before [bad](file%00.md) after",
+	};
+	for (size_t i = 0; i < sizeof(invalid_links) / sizeof(invalid_links[0]); i++)
+	{
+		CHECK(!render_document(&configuration, "command/time.md", invalid_links[i], strlen(invalid_links[i]), &output));
+		CHECK(output.failed);
+		buffer_free(&output);
+	}
+	const char *percent_label = "[100%](x)";
+	CHECK(render_document(&configuration, "command/time.md", percent_label, strlen(percent_label), &output));
+	CHECK(strstr(output.data, "<a href=\"x\">100%</a>"));
+	buffer_free(&output);
 	configuration.output_limit = 32;
 	CHECK(!render_document(&configuration, "index.md", "# too big", 9, &output));
 	buffer_free(&output);
@@ -265,14 +348,46 @@ static void test_renderer(void)
 	configuration_free(&configuration);
 }
 
+static void test_renderer_titles(void)
+{
+	struct configuration configuration = test_configuration();
+	static const struct
+	{
+		const char *markdown;
+		const char *title;
+	} cases[] = {
+		{"## First heading\n\n# Later heading\n", "First heading"},
+		{"Setext heading\n==============\n", "Setext heading"},
+		{"First line\nsecond line\n===========\n", "First line second line"},
+		{"# *Hello* **world** `code` [link](time.md) &amp; ![image](/assets/image.png)\n", "Hello world code link &amp; image"},
+		{"# <em>Heading</em>\n", "Heading"},
+		{"# `</title><script>bad</script>`\n", "&lt;/title&gt;&lt;script&gt;bad&lt;/script&gt;"},
+		{"# &#169; &amp; &#0;\n", "\xc2\xa9 &amp; \xef\xbf\xbd"},
+		{"Body without a heading.\n", "plain"},
+		{"#\n\n# Later heading\n", "plain"},
+	};
+	for (size_t i = 0; i < sizeof(cases) / sizeof(cases[0]); i++)
+	{
+		struct buffer output;
+		CHECK(render_document(&configuration, "command/plain.md", cases[i].markdown, strlen(cases[i].markdown), &output));
+		char expected[512];
+		snprintf(expected, sizeof(expected), "<title>%s — Test &amp; &lt;site&gt;</title>", cases[i].title);
+		CHECK(strstr(output.data, expected));
+		buffer_free(&output);
+	}
+	configuration_free(&configuration);
+}
+
 int main(void)
 {
 	test_buffers();
 	test_configuration_parser();
+	test_configuration_diagnostics();
 	test_configuration_discovery();
 	test_links();
 	test_resolver();
 	test_renderer();
+	test_renderer_titles();
 	puts("subsystem tests passed");
 	return 0;
 }

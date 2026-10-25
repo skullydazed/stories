@@ -14,6 +14,7 @@
 enum option_kind
 {
 	OPTION_STRING,
+	OPTION_LISTEN,
 	OPTION_PATH,
 	OPTION_THREADS,
 	OPTION_LIMIT,
@@ -28,7 +29,7 @@ struct option_definition
 };
 
 static const struct option_definition options[] = {
-	{"server", "listen", OPTION_STRING, offsetof(struct configuration, listen)},
+	{"server", "listen", OPTION_LISTEN, offsetof(struct configuration, listen)},
 	{"server", "threads", OPTION_THREADS, offsetof(struct configuration, threads)},
 	{"content", "root", OPTION_PATH, offsetof(struct configuration, content_root)},
 	{"content", "resolution_order", OPTION_ORDER, 0},
@@ -90,7 +91,7 @@ bool configuration_listen_valid(const char *listen)
 	return inet_pton(family, host, address) == 1;
 }
 
-static char *path_from(const char *base, const char *value)
+static char *path_from(const char *base, const char *value, const char **reason)
 {
 	struct buffer path;
 	buffer_init(&path, STORIES_PATH_LIMIT - 1);
@@ -100,9 +101,16 @@ static char *path_from(const char *base, const char *value)
 		buffer_puts(&path, "/");
 	}
 	buffer_puts(&path, value);
-	/* CivetWeb's rewrite setting uses commas and equals as syntax. */
-	if (path.failed || strchr(path.data, ',') || strchr(path.data, '='))
+	if (path.failed)
 	{
+		*reason = "path is too long or memory allocation failed";
+		buffer_free(&path);
+		return NULL;
+	}
+	/* CivetWeb's rewrite setting uses commas and equals as syntax. */
+	if (strchr(path.data, ',') || strchr(path.data, '='))
+	{
+		*reason = "path must not contain ',' or '='";
 		buffer_free(&path);
 		return NULL;
 	}
@@ -125,7 +133,8 @@ void configuration_free(struct configuration *configuration)
 	*configuration = (struct configuration){0};
 }
 
-static bool directory_order(struct configuration *configuration, char *value)
+/* These validators return NULL on success or a diagnostic on failure. */
+static const char *directory_order(struct configuration *configuration, char *value)
 {
 	char *part = value;
 	while (part)
@@ -134,40 +143,50 @@ static bool directory_order(struct configuration *configuration, char *value)
 		if (next)
 			*next++ = '\0';
 		part = trim(part);
-		if (!*part || configuration->directory_count == CONFIG_ITEMS || strlen(part) > 128 || !strcmp(part, ".") || !strcmp(part, "..") || !strcmp(part, "assets") || !strcmp(part, "_stories"))
-			return false;
+		if (!*part)
+			return "directory names must not be empty";
+		if (configuration->directory_count == CONFIG_ITEMS)
+			return "too many resolution directories";
+		if (strlen(part) > 128)
+			return "directory names must not exceed 128 bytes";
+		if (!strcmp(part, "assets"))
+			return "directory name 'assets' is reserved";
 		for (char *p = part; *p; p++)
 			if (!(isalnum((unsigned char)*p) || *p == '_' || *p == '-'))
-				return false;
+				return "directory names may contain only letters, digits, '_' and '-'";
 		for (size_t i = 0; i < configuration->directory_count; i++)
 			if (!strcmp(part, configuration->directories[i]))
-				return false;
+				return "duplicate directory in resolution order";
 		char *copy = strdup(part);
 		if (!copy)
-			return false;
+			return "out of memory";
 		configuration->directories[configuration->directory_count++] = copy;
 		part = next;
 	}
-	return true;
+	return NULL;
 }
 
-static bool navigation_add(struct configuration *configuration, const char *label, const char *url)
+static const char *navigation_add(struct configuration *configuration, const char *label, const char *url)
 {
-	if (!*label || configuration->navigation_count == CONFIG_ITEMS || !*url || (url[0] != '/' && strncmp(url, "https://", 8) && strncmp(url, "http://", 7)) || !strncmp(url, "//", 2))
-		return false;
+	if (!*label)
+		return "navigation label must not be empty";
+	if (configuration->navigation_count == CONFIG_ITEMS)
+		return "too many navigation links";
+	if (!*url || (url[0] != '/' && strncmp(url, "https://", 8) && strncmp(url, "http://", 7)) || !strncmp(url, "//", 2))
+		return "URL must be a local path starting with a single '/' or an HTTP(S) URL";
 	for (size_t i = 0; i < configuration->navigation_count; i++)
 		if (!strcmp(label, configuration->navigation[i].label))
-			return false;
+			return "duplicate navigation label";
 	char *label_copy = strdup(label);
 	char *url_copy = strdup(url);
 	if (!label_copy || !url_copy)
 	{
 		free(label_copy);
 		free(url_copy);
-		return false;
+		return "out of memory";
 	}
 	configuration->navigation[configuration->navigation_count++] = (struct navigation_link){label_copy, url_copy};
-	return true;
+	return NULL;
 }
 
 bool configuration_parse(const char *data, size_t size, const char *base_directory, struct configuration *output, char *error, size_t error_size)
@@ -178,15 +197,28 @@ bool configuration_parse(const char *data, size_t size, const char *base_directo
 	char                *copy = NULL;
 	size_t               line_number = 0;
 	const char          *reason = "invalid configuration";
+	const char          *setting = NULL;
+	char                 control_error[80];
 	*output = (struct configuration){0};
-	if (size > CONFIG_LIMIT || memchr(data, '\0', size))
+	if (size > CONFIG_LIMIT)
 	{
-		reason = "configuration is too large or contains NUL";
+		reason = "configuration exceeds the 1 MiB limit";
 		goto fail;
 	}
+	line_number = 1;
 	for (size_t i = 0; i < size; i++)
-		if ((unsigned char)data[i] < 32 && data[i] != '\n' && data[i] != '\r' && data[i] != '\t')
+	{
+		unsigned char byte = (unsigned char)data[i];
+		if ((byte < 32 && byte != '\n' && byte != '\r' && byte != '\t') || byte == 127)
+		{
+			snprintf(control_error, sizeof(control_error), "disallowed control byte 0x%02X at byte %zu", (unsigned)byte, i + 1);
+			reason = control_error;
 			goto fail;
+		}
+		if (byte == '\n')
+			line_number++;
+	}
+	line_number = 0;
 	copy = malloc(size + 1);
 	configuration.listen = strdup("127.0.0.1:8080");
 	configuration.title = strdup("Stories");
@@ -204,46 +236,94 @@ bool configuration_parse(const char *data, size_t size, const char *base_directo
 		if (next)
 			*next++ = '\0';
 		line_number++;
+		setting = NULL;
 		line = trim(line);
 		if (!*line || *line == '#' || *line == ';')
 			goto next_line;
 		if (*line == '[')
 		{
 			size_t length = strlen(line);
-			if (length < 3 || line[length - 1] != ']' || length - 2 >= sizeof(section))
+			section[0] = '\0';
+			if (length < 3 || line[length - 1] != ']')
+			{
+				reason = "expected a section header such as [server]";
 				goto fail;
+			}
+			if (length - 2 >= sizeof(section))
+			{
+				reason = "section name must not exceed 31 bytes";
+				goto fail;
+			}
 			line[length - 1] = '\0';
 			strcpy(section, line + 1);
 			if (strcmp(section, "server") && strcmp(section, "content") && strcmp(section, "site") && strcmp(section, "navigation") && strcmp(section, "assets"))
+			{
+				reason = "unknown section";
 				goto fail;
+			}
 			goto next_line;
 		}
 		char *value = strchr(line, '=');
 		if (!value)
+		{
+			reason = "expected key = value";
 			goto fail;
+		}
 		*value++ = '\0';
 		line = trim(line);
 		value = trim(value);
-		if (!*value)
+		setting = line;
+		if (!*section)
+		{
+			reason = "setting appears before a section header";
 			goto fail;
+		}
+		if (!*setting)
+		{
+			reason = "setting name must not be empty";
+			goto fail;
+		}
+		if (!*value)
+		{
+			reason = "value must not be empty";
+			goto fail;
+		}
 		if (!strcmp(section, "navigation"))
 		{
-			if (!navigation_add(&configuration, line, value))
+			const char *problem = navigation_add(&configuration, line, value);
+			if (problem)
+			{
+				reason = problem;
 				goto fail;
+			}
 			goto next_line;
 		}
 		size_t index;
 		for (index = 0; index < sizeof(options) / sizeof(options[0]); index++)
 			if (!strcmp(section, options[index].section) && !strcmp(line, options[index].name))
 				break;
-		if (index == sizeof(options) / sizeof(options[0]) || seen[index])
+		if (index == sizeof(options) / sizeof(options[0]))
+		{
+			reason = "unknown setting";
 			goto fail;
+		}
+		if (seen[index])
+		{
+			reason = "duplicate setting";
+			goto fail;
+		}
 		seen[index] = true;
 		const struct option_definition *option = &options[index];
 		char                           *field = (char *)&configuration + option->offset;
-		if (option->kind == OPTION_STRING || option->kind == OPTION_PATH)
+		if (option->kind == OPTION_STRING || option->kind == OPTION_PATH || option->kind == OPTION_LISTEN)
 		{
-			char *replacement = option->kind == OPTION_PATH ? path_from(base_directory, value) : strdup(value);
+			if (option->kind == OPTION_LISTEN && !configuration_listen_valid(value))
+			{
+				reason = "expected a numeric IPv4 or bracketed IPv6 address and port (0-65535)";
+				goto fail;
+			}
+			reason = "out of memory";
+			char *replacement = option->kind == OPTION_PATH ? path_from(base_directory, value, &reason) : strdup(value);
 			if (!replacement)
 				goto fail;
 			free(*(char **)field);
@@ -251,15 +331,22 @@ bool configuration_parse(const char *data, size_t size, const char *base_directo
 		}
 		else if (option->kind == OPTION_ORDER)
 		{
-			if (!directory_order(&configuration, value))
+			const char *problem = directory_order(&configuration, value);
+			if (problem)
+			{
+				reason = problem;
 				goto fail;
+			}
 		}
 		else
 		{
 			size_t number;
 			size_t maximum = option->kind == OPTION_THREADS ? 1024 : 1024u * 1024u * 1024u;
 			if (!configuration_unsigned(value, maximum, &number) || !number)
+			{
+				reason = option->kind == OPTION_THREADS ? "expected an integer from 1 to 1024" : "expected a byte limit from 1 to 1073741824";
 				goto fail;
+			}
 			if (option->kind == OPTION_THREADS)
 				configuration.threads = (unsigned)number;
 			else
@@ -268,9 +355,17 @@ bool configuration_parse(const char *data, size_t size, const char *base_directo
 	next_line:
 		line = next;
 	}
-	if (!configuration.content_root || !configuration.asset_root || !configuration_listen_valid(configuration.listen))
+	line_number = 0;
+	section[0] = '\0';
+	setting = NULL;
+	if (!configuration.content_root)
 	{
-		reason = "content.root and assets.root are required; server.listen must be a numeric HTTP endpoint";
+		reason = "missing required setting [content] root";
+		goto fail;
+	}
+	if (!configuration.asset_root)
+	{
+		reason = "missing required setting [assets] root";
 		goto fail;
 	}
 	free(copy);
@@ -280,7 +375,14 @@ bool configuration_parse(const char *data, size_t size, const char *base_directo
 	return true;
 
 fail:
-	snprintf(error, error_size, "line %zu: %s", line_number, reason);
+	if (!line_number)
+		snprintf(error, error_size, "%s", reason);
+	else if (*section && setting && *setting)
+		snprintf(error, error_size, "line %zu: [%s] %.64s: %s", line_number, section, setting, reason);
+	else if (*section)
+		snprintf(error, error_size, "line %zu: [%s]: %s", line_number, section, reason);
+	else
+		snprintf(error, error_size, "line %zu: %s", line_number, reason);
 	free(copy);
 	configuration_free(&configuration);
 	return false;
@@ -370,7 +472,12 @@ bool configuration_load_search(const char *explicit_path, const char *const *sea
 		snprintf(error, error_size, "%s: configuration read failed or exceeds 1 MiB", selected);
 		goto done;
 	}
-	result = configuration_parse(input.data ? input.data : "", input.size, base, output, error, error_size);
+	char parse_error[512];
+	result = configuration_parse(input.data ? input.data : "", input.size, base, output, parse_error, sizeof(parse_error));
+	if (!result)
+		snprintf(error, error_size, "%s: %s", selected, parse_error);
+	else if (error_size)
+		error[0] = '\0';
 	goto done;
 
 path_error:

@@ -31,8 +31,6 @@ endif
 
 build_configuration = configuration_data()
 build_configuration.set_quoted('STORIES_VERSION', meson.project_version())
-build_configuration.set_quoted('STORIES_ASSET_DIR', get_option('prefix') / get_option('datadir') / 'stories/assets')
-build_configuration.set_quoted('STORIES_SOURCE_ASSET_DIR', meson.current_source_dir() / 'assets')
 configure_file(output: 'build_config.h', configuration: build_configuration)
 
 entities = custom_target('html-entities', input: 'tools/generate_entities.py', output: 'entities.inc', command: [python, '@INPUT@', '@OUTPUT@'])
@@ -62,6 +60,6 @@ if get_option('fuzzing')
   fuzz_core = static_library('stories-fuzz-core', core_sources, entities, include_directories: includes, dependencies: md4c, c_args: fuzz_flags)
   foreach target : ['url_resolver', 'link_rewriter', 'config_parser']
     fuzzer = executable('fuzz_' + target, 'fuzz/fuzz_' + target + '.c', include_directories: includes, link_with: fuzz_core, dependencies: md4c, c_args: fuzz_flags + [fixture_argument], link_args: fuzz_link_flags)
-    test('fuzz-' + target, python, args: [files('fuzz/smoke.py'), fuzzer.full_path(), meson.current_source_dir() / 'fuzz/corpus' / target, meson.current_build_dir() / 'fuzz-artifacts' / target, '30'], timeout: 50, suite: 'fuzz')
+    test('fuzz-' + target, python, args: [files('fuzz/smoke.py'), fuzzer.full_path(), meson.current_source_dir() / 'fuzz/corpus' / target, meson.current_build_dir() / 'fuzz-artifacts' / target, '30'], depends: fuzzer, timeout: 50, suite: 'fuzz')
   endforeach
 endif

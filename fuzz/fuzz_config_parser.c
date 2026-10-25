@@ -10,6 +10,7 @@ int LLVMFuzzerTestOneInput(const uint8_t *data, size_t size)
 	bool                 parsed = configuration_parse((const char *)data, size, "/fixture", &configuration, error, sizeof(error));
 	if (parsed)
 	{
+		assert(!error[0]);
 		assert(configuration.content_root && configuration.content_root[0] == '/');
 		assert(configuration.asset_root && configuration.asset_root[0] == '/');
 		assert(configuration.directory_count <= CONFIG_ITEMS);
@@ -18,6 +19,7 @@ int LLVMFuzzerTestOneInput(const uint8_t *data, size_t size)
 	}
 	else
 	{
+		assert(error[0]);
 		assert(!configuration.listen && !configuration.content_root && !configuration.asset_root);
 		assert(!configuration.directory_count && !configuration.navigation_count);
 	}

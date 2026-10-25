@@ -74,7 +74,7 @@ Explain why defensive checks exist, especially when their removal would reopen a
 
 Use the libraries' supported public interfaces and keep adaptation code at the integration boundary. Respect their resource ownership and callback contracts. Copy or retain library data only according to its documented lifetime; never assume parser callback strings are NUL-terminated.
 
-Document callback return conventions where they are easy to confuse. In CivetWeb, `begin_request` returns zero to delegate, while `http_error` returns zero when the error has been handled. MD4C rendering callbacks return nonzero to abort parsing. Keep failure propagation visible through those boundaries.
+Document callback return conventions where they are easy to confuse. In CivetWeb, `begin_request` returns zero to delegate, while `http_error` returns zero when the error has been handled. MD4C rendering callbacks return zero on success and negative values on failure: supported older versions can silently drop positive error returns. Preserve renderer failures in the output buffer's sticky flag as well, including failures from temporary buffers and link rewriting. Keep failure propagation visible through those boundaries.
 
 Let CivetWeb handle connections, worker threads, and static-file response mechanics. Let MD4C parse Markdown and expose rendering events. Keep Stories' URL, filesystem, rendering, and configuration policies explicit around those interfaces.
 
