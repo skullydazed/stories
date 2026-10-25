@@ -1,0 +1,278 @@
+#include "buffer.h"
+#include "config.h"
+#include "document.h"
+#include "entities.h"
+#include "render.h"
+#include "url.h"
+
+#include <fcntl.h>
+#include <stdio.h>
+#include <stdlib.h>
+#include <string.h>
+#include <sys/stat.h>
+#include <unistd.h>
+
+#define CHECK(expression)                                                                \
+	do                                                                               \
+	{                                                                                \
+		if (!(expression))                                                       \
+		{                                                                        \
+			fprintf(stderr, "%s:%d: %s\n", __FILE__, __LINE__, #expression); \
+			exit(1);                                                         \
+		}                                                                        \
+	} while (0)
+
+static struct configuration test_configuration(void)
+{
+	const char          *text = "[content]\nroot = docs\nresolution_order = disambiguation, command, function\n[assets]\nroot = assets\n[site]\ntitle = Test & <site>\n[navigation]\nHome = /\n";
+	struct configuration configuration;
+	char                 error[256];
+	CHECK(configuration_parse(text, strlen(text), "/tmp", &configuration, error, sizeof(error)));
+	return configuration;
+}
+
+static void test_buffers(void)
+{
+	struct buffer buffer;
+	buffer_init(&buffer, 3);
+	CHECK(buffer_append(&buffer, "abc", 3));
+	CHECK(buffer.size == 3 && !strcmp(buffer.data, "abc"));
+	CHECK(!buffer_puts(&buffer, "d"));
+	CHECK(buffer.failed && buffer.size == 3);
+	buffer_free(&buffer);
+	buffer_init(&buffer, 64);
+	CHECK(buffer_html(&buffer, "<&\"'", 4));
+	CHECK(!strcmp(buffer.data, "&lt;&amp;&quot;&#39;"));
+	buffer_free(&buffer);
+	buffer_init(&buffer, 64);
+	CHECK(buffer_url(&buffer, "/a +b", 5));
+	CHECK(!strcmp(buffer.data, "/a%20%2Bb"));
+	buffer_free(&buffer);
+	buffer_init(&buffer, 0);
+	CHECK(buffer_append(&buffer, "", 0));
+	CHECK(!buffer_puts(&buffer, "a"));
+	buffer_free(&buffer);
+}
+
+static void test_configuration_parser(void)
+{
+	struct configuration configuration = test_configuration();
+	CHECK(configuration.threads == 8);
+	CHECK(configuration.directory_count == 3);
+	CHECK(!strcmp(configuration.content_root, "/tmp/docs"));
+	CHECK(!strcmp(configuration.navigation[0].url, "/"));
+	configuration_free(&configuration);
+	const char *invalid[] = {
+		"",
+		"[unknown]\nx = y",
+		"[server]\nthreads=0",
+		"[server]\nthreads=9999999999999999999999999999999999999999999",
+		"[content]\nroot=a\nroot=b",
+		"[content]\nroot=a\nresolution_order=command,,function",
+		"[content]\nroot=a\nresolution_order=command,command",
+		"[content]\nroot=a\nresolution_order=../private",
+		"[content]\nroot=a\nresolution_order=assets",
+		"[navigation]\nBad=javascript:alert(1)",
+		"[navigation]\nBad=//example.org",
+		"[navigation]\nHome=/\nHome=/other",
+		"[server]\nlisten=127.0.0.1:443s",
+		"[server]\nlisten=127.0.0.1:1,127.0.0.1:2",
+	};
+	for (size_t i = 0; i < sizeof(invalid) / sizeof(invalid[0]); i++)
+	{
+		char error[256];
+		CHECK(!configuration_parse(invalid[i], strlen(invalid[i]), "/tmp", &configuration, error, sizeof(error)));
+		CHECK(configuration.content_root == NULL && configuration.directory_count == 0 && configuration.listen == NULL);
+		CHECK(error[0]);
+		configuration_free(&configuration);
+	}
+	char error[256];
+	CHECK(!configuration_parse("[site]\ntitle=x\0hidden", 21, "/tmp", &configuration, error, sizeof(error)));
+	size_t number;
+	CHECK(configuration_unsigned("1024", 1024, &number) && number == 1024);
+	CHECK(!configuration_unsigned("1025", 1024, &number));
+	CHECK(!configuration_unsigned("-1", 1024, &number));
+	CHECK(configuration_listen_valid("[::1]:8080"));
+	CHECK(!configuration_listen_valid("::1:8080"));
+	CHECK(!configuration_listen_valid("999.999.999.999:8080"));
+	CHECK(!configuration_listen_valid("dead:8080"));
+	char *oversize = malloc(CONFIG_LIMIT + 1);
+	CHECK(oversize);
+	memset(oversize, 'x', CONFIG_LIMIT + 1);
+	CHECK(!configuration_parse(oversize, CONFIG_LIMIT + 1, "/tmp", &configuration, error, sizeof(error)));
+	free(oversize);
+}
+
+static void test_links(void)
+{
+	static const struct
+	{
+		const char *input;
+		const char *source;
+		const char *expected;
+	} cases[] = {
+		{"../function/time.md#details", "command/time.md", "/function/time#details"},
+		{"../function/time.md?a=1&b=2#details", "command/time.md", "/function/time?a=1&b=2#details"},
+		{"./index.md", "command/time.md", "/command/"},
+		{"../index.md", "command/time.md", "/"},
+		{"plain.md", "command/index.md", "/command/plain"},
+		{"/command/index.md", "index.md", "/command/"},
+		{"a%20b.md", "command/time.md", "/command/a%20b"},
+		{"a%2Bb.md", "command/time.md", "/command/a%2Bb"},
+		{"time%2emd#x", "command/plain.md", "/command/time#x"},
+		{"https://example.org/readme.md?q=x", "index.md", "https://example.org/readme.md?q=x"},
+		{"//example.org/readme.md", "index.md", "//example.org/readme.md"},
+		{"mailto:person@example.org", "index.md", "mailto:person@example.org"},
+		{"#readme.md", "index.md", "#readme.md"},
+		{"?readme.md", "index.md", "?readme.md"},
+		{"../assets/image.png", "command/time.md", "../assets/image.png"},
+	};
+	for (size_t i = 0; i < sizeof(cases) / sizeof(cases[0]); i++)
+	{
+		struct buffer output;
+		buffer_init(&output, 16384);
+		CHECK(url_rewrite_link(cases[i].input, strlen(cases[i].input), cases[i].source, &output));
+		CHECK(!strcmp(output.data, cases[i].expected));
+		buffer_free(&output);
+	}
+	const char *bad[] = {"../../outside.md", "file%00.md", "%GG.md", "file\\name.md", "file\n.md"};
+	for (size_t i = 0; i < sizeof(bad) / sizeof(bad[0]); i++)
+	{
+		struct buffer output;
+		buffer_init(&output, 16384);
+		CHECK(!url_rewrite_link(bad[i], strlen(bad[i]), "index.md", &output));
+		buffer_free(&output);
+	}
+	const char *invalid[] = {"", "relative", "//host", "/../secret", "/command/../secret", "/command//time", "/.hidden", "/bad\\path", "/bad?query"};
+	for (size_t i = 0; i < sizeof(invalid) / sizeof(invalid[0]); i++)
+		CHECK(!url_path_valid(invalid[i], strlen(invalid[i])));
+	CHECK(!url_path_valid("/abc\0hidden", 11));
+	CHECK(url_path_valid("/command/time", 13));
+	CHECK(url_path_valid("/command/", 9));
+}
+
+static void write_configuration(const char *path, const char *title)
+{
+	FILE *file = fopen(path, "wb");
+	CHECK(file);
+	CHECK(fprintf(file, "[content]\nroot=docs\n[assets]\nroot=assets\n[site]\ntitle=%s\n", title) > 0);
+	CHECK(!fclose(file));
+}
+
+static void test_configuration_discovery(void)
+{
+	char directory[] = "/tmp/stories-config-XXXXXX";
+	CHECK(mkdtemp(directory));
+	char local[256], system[256], explicit_path[256];
+	snprintf(local, sizeof(local), "%s/local.conf", directory);
+	snprintf(system, sizeof(system), "%s/system.conf", directory);
+	snprintf(explicit_path, sizeof(explicit_path), "%s/explicit.conf", directory);
+	const char          *search[] = {local, system};
+	struct configuration configuration;
+	char                 error[512];
+	CHECK(!configuration_load_search(NULL, search, 2, &configuration, error, sizeof(error)));
+	write_configuration(system, "system");
+	CHECK(configuration_load_search(NULL, search, 2, &configuration, error, sizeof(error)));
+	CHECK(!strcmp(configuration.title, "system"));
+	configuration_free(&configuration);
+	write_configuration(local, "local");
+	CHECK(configuration_load_search(NULL, search, 2, &configuration, error, sizeof(error)));
+	CHECK(!strcmp(configuration.title, "local"));
+	configuration_free(&configuration);
+	CHECK(!configuration_load_search(explicit_path, search, 2, &configuration, error, sizeof(error)));
+	write_configuration(explicit_path, "explicit");
+	CHECK(configuration_load_search(explicit_path, search, 2, &configuration, error, sizeof(error)));
+	CHECK(!strcmp(configuration.title, "explicit"));
+	configuration_free(&configuration);
+	FILE *file = fopen(local, "wb");
+	CHECK(file && fputs("[invalid]\n", file) >= 0 && !fclose(file));
+	CHECK(!configuration_load_search(NULL, search, 2, &configuration, error, sizeof(error)));
+	CHECK(!unlink(local));
+	CHECK(!symlink("missing-target", local));
+	CHECK(!configuration_load_search(NULL, search, 2, &configuration, error, sizeof(error)));
+	CHECK(!unlink(local));
+	CHECK(!mkfifo(local, 0600));
+	CHECK(!configuration_load_search(NULL, search, 2, &configuration, error, sizeof(error)));
+	CHECK(!unlink(local));
+	CHECK(!unlink(system));
+	CHECK(!unlink(explicit_path));
+	CHECK(!rmdir(directory));
+}
+
+static void test_resolver(void)
+{
+	struct configuration configuration = test_configuration();
+	int                  root = open(TEST_FIXTURE_DIR, O_RDONLY | O_DIRECTORY);
+	CHECK(root >= 0);
+	static const struct
+	{
+		const char       *path;
+		enum route_status status;
+		const char       *source;
+		const char       *location;
+	} cases[] = {
+		{"/", ROUTE_DOCUMENT, "index.md", "/"},
+		{"/index", ROUTE_REDIRECT, "index.md", "/"},
+		{"/command/time", ROUTE_DOCUMENT, "command/time.md", "/command/time"},
+		{"/time", ROUTE_REDIRECT, "disambiguation/time.md", "/disambiguation/time"},
+		{"/time_command", ROUTE_REDIRECT, "command/time.md", "/command/time"},
+		{"/plain_function", ROUTE_MISSING, "", ""},
+		{"/command", ROUTE_REDIRECT, "command/index.md", "/command/"},
+		{"/command/index", ROUTE_REDIRECT, "command/index.md", "/command/"},
+		{"/command/", ROUTE_DOCUMENT, "command/index.md", "/command/"},
+		{"/function/", ROUTE_MISSING, "", ""},
+		{"/command/time.md", ROUTE_MISSING, "", ""},
+		{"/missing", ROUTE_MISSING, "", ""},
+		{"/command/../index", ROUTE_INVALID, "", ""},
+	};
+	for (size_t i = 0; i < sizeof(cases) / sizeof(cases[0]); i++)
+	{
+		struct document_route route;
+		document_resolve(root, &configuration, cases[i].path, strlen(cases[i].path), &route);
+		CHECK(route.status == cases[i].status);
+		if (route.status == ROUTE_DOCUMENT || route.status == ROUTE_REDIRECT)
+		{
+			CHECK(route.fd >= 0);
+			CHECK(!strcmp(route.source, cases[i].source));
+			CHECK(!strcmp(route.location.data, cases[i].location));
+			struct buffer content;
+			CHECK(document_read(route.fd, 65536, &content));
+			CHECK(content.size);
+			buffer_free(&content);
+		}
+		document_route_free(&route);
+	}
+	close(root);
+	configuration_free(&configuration);
+}
+
+static void test_renderer(void)
+{
+	struct configuration configuration = test_configuration();
+	const char          *markdown = "# Heading\n\n[inline](../function/time.md?a=1&b=2#x)\n\n[reference][r]\n\n[r]: index.md \"Title &amp; quote\"\n\n[encoded](time&#46;md)\n\n![*rich* <b>label</b>](../assets/image.png \"image title\")\n\n~~gone~~\n\n- [x] done\n\n| A | B |\n|---|---|\n| one | two |\n\n```c\n<code>&\n```\n\nhttps://example.org\n\n<a href=\"raw.md\">raw HTML</a>\n\n&copy; &#x1F600; &NotEqualTilde;\n";
+	struct buffer        output;
+	CHECK(render_document(&configuration, "command/time.md", markdown, strlen(markdown), &output));
+	const char *expected[] = {"<h1>Heading</h1>", "href=\"/function/time?a=1&amp;b=2#x\"", "href=\"/command/\"", "href=\"/command/time\"", "title=\"Title &amp; quote\"", "src=\"../assets/image.png\"", "alt=\"rich &lt;b&gt;label&lt;/b&gt;\"", "<del>gone</del>", "disabled checked", "<table>", "language-c", "&lt;code&gt;&amp;", "href=\"https://example.org\"", "<a href=\"raw.md\">", "Test &amp; &lt;site&gt;", "\xc2\xa9"};
+	for (size_t i = 0; i < sizeof(expected) / sizeof(expected[0]); i++)
+		CHECK(strstr(output.data, expected[i]));
+	buffer_free(&output);
+	configuration.output_limit = 32;
+	CHECK(!render_document(&configuration, "index.md", "# too big", 9, &output));
+	buffer_free(&output);
+	CHECK(render_error(&configuration, "Error", "<escaped>", &output));
+	CHECK(strstr(output.data, "&lt;escaped&gt;"));
+	buffer_free(&output);
+	configuration_free(&configuration);
+}
+
+int main(void)
+{
+	test_buffers();
+	test_configuration_parser();
+	test_configuration_discovery();
+	test_links();
+	test_resolver();
+	test_renderer();
+	puts("subsystem tests passed");
+	return 0;
+}

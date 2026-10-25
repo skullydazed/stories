@@ -1,0 +1,152 @@
+#include "url.h"
+#include "config.h"
+
+#include <ctype.h>
+#include <string.h>
+
+bool url_markdown_extension(const char *path, size_t size)
+{
+	return size >= 3 && path[size - 3] == '.' && (path[size - 2] == 'm' || path[size - 2] == 'M') && (path[size - 1] == 'd' || path[size - 1] == 'D');
+}
+
+bool url_path_valid(const char *path, size_t size)
+{
+	if (!size || size >= STORIES_PATH_LIMIT || path[0] != '/')
+		return false;
+	size_t segment = 1;
+	for (size_t i = 0; i <= size; i++)
+	{
+		if (i < size)
+		{
+			unsigned char c = (unsigned char)path[i];
+			if (c < 32 || c == 127 || c == '\\' || c == '?' || c == '#')
+				return false;
+		}
+		if (i && (i == size || path[i] == '/'))
+		{
+			size_t length = i - segment;
+			if ((length == 1 && path[segment] == '.') || (length == 2 && !memcmp(path + segment, "..", 2)) || (!length && i != size))
+				return false;
+			/* Keep dotfiles (including .htpasswd) outside both published namespaces. */
+			if (length && path[segment] == '.')
+				return false;
+			segment = i + 1;
+		}
+	}
+	return true;
+}
+
+bool url_document_location(const char *source, struct buffer *output)
+{
+	size_t length = strlen(source);
+	if (length < 3 || strcmp(source + length - 3, ".md"))
+		return false;
+	length -= 3;
+	/* A source such as foo.md.md has no supported extensionless public URL. */
+	if (url_markdown_extension(source, length))
+		return false;
+	if ((length == 5 && !memcmp(source, "index", 5)) || (length >= 6 && !memcmp(source + length - 6, "/index", 6)))
+		length -= 5;
+	return buffer_puts(output, "/") && buffer_url(output, source, length);
+}
+
+static bool external_url(const char *text, size_t size)
+{
+	if (size >= 2 && text[0] == '/' && text[1] == '/')
+		return true;
+	if (!size || !isalpha((unsigned char)text[0]))
+		return false;
+	for (size_t i = 1; i < size; i++)
+	{
+		if (text[i] == ':')
+			return true;
+		if (!(isalnum((unsigned char)text[i]) || text[i] == '+' || text[i] == '-' || text[i] == '.'))
+			return false;
+	}
+	return false;
+}
+
+static int hex_digit(unsigned char c)
+{
+	if (c >= '0' && c <= '9')
+		return c - '0';
+	if (c >= 'a' && c <= 'f')
+		return c - 'a' + 10;
+	if (c >= 'A' && c <= 'F')
+		return c - 'A' + 10;
+	return -1;
+}
+
+bool url_rewrite_link(const char *destination, size_t size, const char *source, struct buffer *output)
+{
+	char   decoded[STORIES_PATH_LIMIT];
+	char   joined[STORIES_PATH_LIMIT];
+	char   normalized[STORIES_PATH_LIMIT];
+	size_t offsets[STORIES_PATH_LIMIT / 2];
+	size_t decoded_size = 0, joined_size = 0, normalized_size = 0, depth = 0;
+	size_t path_size = 0;
+	if (memchr(destination, '\0', size))
+		return false;
+	if (!size || destination[0] == '#' || destination[0] == '?' || external_url(destination, size))
+		return buffer_append(output, destination, size);
+	while (path_size < size && destination[path_size] != '?' && destination[path_size] != '#')
+		path_size++;
+	if (path_size >= sizeof(decoded))
+		return false;
+	for (size_t i = 0; i < path_size; i++)
+	{
+		unsigned char c = (unsigned char)destination[i];
+		if (c == '%')
+		{
+			if (i + 2 >= path_size || hex_digit((unsigned char)destination[i + 1]) < 0 || hex_digit((unsigned char)destination[i + 2]) < 0)
+				return false;
+			c = (unsigned char)(hex_digit((unsigned char)destination[i + 1]) * 16 + hex_digit((unsigned char)destination[i + 2]));
+			i += 2;
+		}
+		if (c < 32 || c == 127 || c == '\\')
+			return false;
+		decoded[decoded_size++] = (char)c;
+	}
+	decoded[decoded_size] = '\0';
+	if (decoded_size < 3 || strcmp(decoded + decoded_size - 3, ".md"))
+		return buffer_append(output, destination, size);
+	if (decoded[0] != '/')
+	{
+		const char *slash = strrchr(source, '/');
+		joined_size = slash ? (size_t)(slash - source) + 1 : 0;
+		if (joined_size >= sizeof(joined))
+			return false;
+		memcpy(joined, source, joined_size);
+	}
+	if (decoded_size >= sizeof(joined) - joined_size)
+		return false;
+	memcpy(joined + joined_size, decoded, decoded_size + 1);
+	joined_size += decoded_size;
+	for (size_t i = 0; i < joined_size;)
+	{
+		while (i < joined_size && joined[i] == '/')
+			i++;
+		size_t start = i;
+		while (i < joined_size && joined[i] != '/')
+			i++;
+		size_t length = i - start;
+		if (!length || (length == 1 && joined[start] == '.'))
+			continue;
+		if (length == 2 && !memcmp(joined + start, "..", 2))
+		{
+			if (!depth)
+				return false;
+			normalized_size = offsets[--depth];
+			continue;
+		}
+		if (depth == sizeof(offsets) / sizeof(offsets[0]))
+			return false;
+		offsets[depth++] = normalized_size;
+		if (normalized_size)
+			normalized[normalized_size++] = '/';
+		memcpy(normalized + normalized_size, joined + start, length);
+		normalized_size += length;
+	}
+	normalized[normalized_size] = '\0';
+	return url_document_location(normalized, output) && buffer_append(output, destination + path_size, size - path_size);
+}

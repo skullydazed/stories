@@ -1,0 +1,2 @@
+option('tests', type: 'boolean', value: true, description: 'Build C tests and run Python HTTP tests')
+option('fuzzing', type: 'boolean', value: false, description: 'Build Clang libFuzzer targets with ASan and UBSan')

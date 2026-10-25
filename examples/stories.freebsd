@@ -1,0 +1,23 @@
+#!/bin/sh
+# Install as /usr/local/etc/rc.d/stories, chmod 0555, and set stories_enable="YES".
+# PROVIDE: stories
+# REQUIRE: NETWORKING
+# KEYWORD: shutdown
+
+. /etc/rc.subr
+
+name="stories"
+rcvar="stories_enable"
+load_rc_config "$name"
+
+: ${stories_enable:="NO"}
+: ${stories_user:="www"}
+: ${stories_config:="/etc/stories.conf"}
+
+pidfile="/var/run/stories.pid"
+procname="/usr/local/bin/stories"
+command="/usr/sbin/daemon"
+command_args="-f -S -T stories -p ${pidfile} -u ${stories_user} ${procname} --config ${stories_config}"
+required_files="${stories_config}"
+
+run_rc_command "$1"

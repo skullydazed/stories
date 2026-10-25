@@ -1,1 +1,4 @@
-docroot
+/docroot/
+/build*/
+__pycache__/
+*.pyc
