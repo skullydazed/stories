@@ -26,11 +26,20 @@ static const struct option command_options[] = {
 
 static void usage(FILE *output)
 {
-	fputs("Usage: stories [--config PATH] [--listen ADDRESS:PORT] [--threads COUNT] [--check-config]\n"
-	      "Without --config, try ./stories.conf, then /etc/stories.conf.\n"
-	      "  --check-config  Validate configuration and content/asset roots, then exit\n"
-	      "  --help          Show this help\n"
-	      "  --version       Show the version\n",
+	fputs("Usage: stories [options]\n"
+	      "\n"
+	      "Serve Markdown documentation over HTTP.\n"
+	      "\n"
+	      "Options:\n"
+	      "  -c, --config PATH          Read configuration from PATH.\n"
+	      "      --listen ADDRESS:PORT  Override the configured listening address.\n"
+	      "      --threads COUNT        Override the configured worker count (1-1024).\n"
+	      "      --check-config         Validate configuration and content/asset roots, then exit.\n"
+	      "  -h, --help                 Show this help and exit.\n"
+	      "      --version              Show the version and exit.\n"
+	      "\n"
+	      "Without --config, check ./stories.conf, then /etc/stories.conf; exit with an error if neither exists.\n"
+	      "Configuration defaults: listen=127.0.0.1:8080, threads=8.\n",
 	      output);
 }
 

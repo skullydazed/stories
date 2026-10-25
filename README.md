@@ -143,7 +143,7 @@ Pass an artifact as the sole positional input to reproduce it. Use libFuzzer's `
 
 ## C conventions and lifecycle
 
-Stories uses procedural, subsystem-oriented C with concrete names, private helpers, direct control flow, Allman braces, tabs, and no artificial line-length limit. [docs/design.md](docs/design.md) describes ownership, callback contracts, filesystem policy, lifecycle sequencing, and test boundaries. `.clang-format` records formatting conventions.
+Stories uses procedural, subsystem-oriented C with concrete names, private helpers, direct control flow, Allman braces, tabs, and no artificial line-length limit. [CODESTYLE.md](CODESTYLE.md) defines coding conventions. [docs/design.md](docs/design.md) describes ownership, callback contracts, filesystem policy, lifecycle sequencing, and test boundaries. `.clang-format` records formatting conventions.
 
 The runtime has no mutable application globals. Process-level code owns configuration and server resources; each request owns its document and output buffers. Small shared utilities enforce bounds, escaping, and URL policy. Tables represent registries and mappings; library callbacks provide request and Markdown event dispatch.
 
