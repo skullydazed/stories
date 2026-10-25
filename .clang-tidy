@@ -1,0 +1,3 @@
+# Keep the analyzer checks; optional Annex K API advice does not fit POSIX targets.
+Checks: '-*,clang-analyzer-*,-clang-analyzer-security.insecureAPI.DeprecatedOrUnsafeBufferHandling'
+WarningsAsErrors: '*'

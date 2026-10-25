@@ -48,10 +48,10 @@ bool url_path_valid(const char *path, size_t size)
 	return true;
 }
 
-bool url_document_location(const char *source, struct buffer *output)
+/* source is a borrowed byte span and need not be NUL-terminated. */
+static bool document_location(const char *source, size_t length, struct buffer *output)
 {
-	size_t length = strlen(source);
-	if (length < 3 || strcmp(source + length - 3, ".md"))
+	if (length < 3 || memcmp(source + length - 3, ".md", 3))
 		return false;
 	length -= 3;
 	if ((length == 5 && !memcmp(source, "index", 5)) || (length >= 6 && !memcmp(source + length - 6, "/index", 6)))
@@ -59,6 +59,11 @@ bool url_document_location(const char *source, struct buffer *output)
 	if (url_path_has_extension(source, length))
 		return false;
 	return buffer_puts(output, "/") && buffer_url(output, source, length);
+}
+
+bool url_document_location(const char *source, struct buffer *output)
+{
+	return document_location(source, strlen(source), output);
 }
 
 static bool external_url(const char *text, size_t size)
@@ -185,5 +190,5 @@ bool url_rewrite_link(const char *destination, size_t size, const char *source, 
 		normalized_size += length;
 	}
 	normalized[normalized_size] = '\0';
-	return url_document_location(normalized, output) && buffer_append(output, destination + path_size, size - path_size);
+	return document_location(normalized, normalized_size, output) && buffer_append(output, destination + path_size, size - path_size);
 }

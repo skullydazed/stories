@@ -116,6 +116,9 @@ static void test_configuration_diagnostics(void)
 		{"[server]\nlisten=localhost:8080\n", "line 2: [server] listen: expected a numeric IPv4 or bracketed IPv6 address and port"},
 		{"[unknown]\n", "line 1: [unknown]: unknown section"},
 		{"[server\n", "line 1: expected a section header"},
+		{"[", "line 1: expected a section header"},
+		{"[]", "line 1: expected a section header"},
+		{"[server]tail", "line 1: expected a section header"},
 		{"[server]\nthreads\n", "line 2: [server]: expected key = value"},
 		{"threads=4\n", "line 1: setting appears before a section header"},
 		{"[site]\n=value\n", "line 2: [site]: setting name must not be empty"},
@@ -259,6 +262,21 @@ static void test_configuration_discovery(void)
 	CHECK(!mkfifo(local, 0600));
 	CHECK(!configuration_load_search(NULL, search, 2, &configuration, error, sizeof(error)));
 	CHECK(!unlink(local));
+	const char   tail[] = "[content]\nroot=docs\n[assets]\nroot=assets\n[site]\ntitle=block boundary\n";
+	const size_t sizes[] = {4095, 4096, 4097, 8192, 8193};
+	for (size_t i = 0; i < sizeof(sizes) / sizeof(sizes[0]); i++)
+	{
+		FILE *boundary_file = fopen(explicit_path, "wb");
+		CHECK(boundary_file);
+		/* Put the settings at EOF so a dropped partial block cannot pass. */
+		for (size_t padding = sizeof(tail) - 1; padding < sizes[i]; padding++)
+			CHECK(fputc('\n', boundary_file) != EOF);
+		CHECK(fwrite(tail, 1, sizeof(tail) - 1, boundary_file) == sizeof(tail) - 1);
+		CHECK(!fclose(boundary_file));
+		CHECK(configuration_load_search(explicit_path, search, 2, &configuration, error, sizeof(error)));
+		CHECK(!strcmp(configuration.title, "block boundary"));
+		configuration_free(&configuration);
+	}
 	CHECK(!unlink(system));
 	CHECK(!unlink(explicit_path));
 	CHECK(!rmdir(directory));

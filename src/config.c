@@ -244,19 +244,20 @@ bool configuration_parse(const char *data, size_t size, const char *base_directo
 			goto next_line;
 		if (*line == '[')
 		{
-			size_t length = strlen(line);
+			char *closing = strrchr(line, ']');
 			section[0] = '\0';
-			if (length < 3 || line[length - 1] != ']')
+			if (!closing || closing == line + 1 || closing[1])
 			{
 				reason = "expected a section header such as [server]";
 				goto fail;
 			}
-			if (length - 2 >= sizeof(section))
+			size_t length = (size_t)(closing - (line + 1));
+			if (length >= sizeof(section))
 			{
 				reason = "section name must not exceed 31 bytes";
 				goto fail;
 			}
-			line[length - 1] = '\0';
+			*closing = '\0';
 			strcpy(section, line + 1);
 			if (strcmp(section, "server") && strcmp(section, "content") && strcmp(section, "site") && strcmp(section, "navigation") && strcmp(section, "assets"))
 			{
@@ -466,7 +467,8 @@ bool configuration_load_search(const char *explicit_path, const char *const *sea
 	}
 	char   block[4096];
 	size_t count;
-	while ((count = fread(block, 1, sizeof(block), file)))
+	/* A partial read can return bytes while also setting EOF or an error. */
+	while (!feof(file) && !ferror(file) && (count = fread(block, 1, sizeof(block), file)))
 		if (!buffer_append(&input, block, count))
 			break;
 	if (ferror(file) || input.failed)
