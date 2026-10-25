@@ -1,5 +1,6 @@
 #include "build_config.h"
 #include "config.h"
+#include "page_template.h"
 #include "server.h"
 
 #include <getopt.h>
@@ -34,7 +35,7 @@ static void usage(FILE *output)
 	      "  -c, --config PATH          Read configuration from PATH.\n"
 	      "      --listen ADDRESS:PORT  Override the configured listening address.\n"
 	      "      --threads COUNT        Override the configured worker count (1-1024).\n"
-	      "      --check-config         Validate configuration and content/asset roots, then exit.\n"
+	      "      --check-config         Validate configuration, roots, and page template, then exit.\n"
 	      "  -h, --help                 Show this help and exit.\n"
 	      "      --version              Show the version and exit.\n"
 	      "\n"
@@ -110,6 +111,11 @@ int main(int argc, char **argv)
 			goto done;
 		}
 		configuration.threads = (unsigned)number;
+	}
+	if (!page_template_check(&configuration, error, sizeof(error)))
+	{
+		fprintf(stderr, "%s\n", error);
+		goto done;
 	}
 	if (check)
 	{

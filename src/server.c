@@ -88,10 +88,10 @@ static int send_response(struct mg_connection *connection, int status, const cha
 	return status;
 }
 
-static int send_error(struct mg_connection *connection, const struct configuration *configuration, int status, const char *title, const char *message)
+static int send_error(struct mg_connection *connection, const struct server *server, int status, const char *title, const char *message)
 {
 	struct buffer body;
-	if (!render_error(configuration, title, message, &body))
+	if (!render_error(server->configuration, title, message, &body))
 	{
 		buffer_free(&body);
 		buffer_init(&body, 64);
@@ -112,7 +112,7 @@ static int send_encoded_asset(struct mg_connection *connection, const struct ser
 	if (filename.failed)
 	{
 		buffer_free(&filename);
-		return send_error(connection, server->configuration, 400, "Bad Request", "Asset path is too long.");
+		return send_error(connection, server, 400, "Bad Request", "Asset path is too long.");
 	}
 	/* Automatic URI decoding is disabled so embedded NULs cannot truncate a
 	 * request before validation. For encoded assets, give the validated filename
@@ -128,7 +128,7 @@ static int request_begin(struct mg_connection *connection)
 	struct server                *server = request->user_data;
 	const struct configuration   *configuration = server->configuration;
 	if (strcmp(request->request_method, "GET") && strcmp(request->request_method, "HEAD"))
-		return send_error(connection, configuration, 405, "Method Not Allowed", "Use GET or HEAD.");
+		return send_error(connection, server, 405, "Method Not Allowed", "Use GET or HEAD.");
 
 	/* Preserve the original encoded path with decode_url=no. CivetWeb's default
 	 * in-place decoding inserts NULs into request_uri/local_uri_raw before this
@@ -137,27 +137,27 @@ static int request_begin(struct mg_connection *connection)
 	 * The final argument is zero because URL paths are not form-encoded data. */
 	const char *encoded_path = request->local_uri_raw;
 	if (!encoded_path)
-		return send_error(connection, configuration, 400, "Bad Request", "Invalid document path.");
+		return send_error(connection, server, 400, "Bad Request", "Invalid document path.");
 	size_t encoded_size = strlen(encoded_path);
 	char   path[STORIES_PATH_LIMIT];
 	int    decoded_size = encoded_size > INT_MAX ? -1 : mg_url_decode(encoded_path, (int)encoded_size, path, (int)sizeof(path), 0);
 	if (decoded_size < 0 || !url_path_valid(path, (size_t)decoded_size))
-		return send_error(connection, configuration, 400, "Bad Request", "Invalid document path.");
+		return send_error(connection, server, 400, "Bad Request", "Invalid document path.");
 	size_t path_size = (size_t)decoded_size;
 	bool   asset = !strncmp(path, "/assets/", 8);
 	if (url_markdown_extension(path, path_size) || (!asset && url_path_has_extension(path, path_size)))
-		return send_error(connection, configuration, 404, "Not Found", "No document exists at this URL.");
+		return send_error(connection, server, 404, "Not Found", "No document exists at this URL.");
 	if (asset)
 	{
 		/* Match CivetWeb's own MIME classification before an asset can
 		 * serve a file. HTML pages belong to the Markdown renderer. */
 		const char *mime = mg_get_builtin_mime_type(path);
 		if (!strcmp(mime, "text/html") || !strcmp(mime, "application/xhtml+xml"))
-			return send_error(connection, configuration, 404, "Not Found", "No document exists at this URL.");
+			return send_error(connection, server, 404, "Not Found", "No document exists at this URL.");
 		return !strcmp(encoded_path, path) ? 0 : send_encoded_asset(connection, server, path);
 	}
 	if (!strcmp(path, "/assets"))
-		return send_error(connection, configuration, 404, "Not Found", "No document exists at this URL.");
+		return send_error(connection, server, 404, "Not Found", "No document exists at this URL.");
 
 	struct document_route route;
 	document_resolve(server->content_fd, configuration, path, path_size, &route);
@@ -178,29 +178,31 @@ static int request_begin(struct mg_connection *connection)
 			buffer_puts(&headers, request->query_string);
 		}
 		buffer_puts(&headers, "\r\n");
-		result = headers.failed ? send_error(connection, configuration, 400, "Bad Request", "Invalid redirect query.") : send_response(connection, 301, "Moved Permanently", headers.data, &body);
+		result = headers.failed ? send_error(connection, server, 400, "Bad Request", "Invalid redirect query.") : send_response(connection, 301, "Moved Permanently", headers.data, &body);
 		buffer_free(&headers);
 		buffer_free(&body);
 	}
 	else if (route.status == ROUTE_DOCUMENT)
 	{
 		struct buffer markdown, html = {0};
-		if (!document_read(route.fd, configuration->markdown_limit, &markdown) || !render_document(configuration, route.source, markdown.data, markdown.size, &html))
+		bool          rendered = document_read(route.fd, configuration->markdown_limit, &markdown) && render_document(configuration, route.source, markdown.data, markdown.size, &html);
+		buffer_free(&markdown);
+		if (!rendered)
 		{
-			fprintf(stderr, "cannot read/render document: %s (I/O error, invalid link, or configured limit)\n", route.source);
-			result = send_error(connection, configuration, 500, "Internal Server Error", "The document could not be rendered.");
+			buffer_free(&html);
+			fprintf(stderr, "cannot read/render document: %s (I/O error, invalid link/template, or configured limit)\n", route.source);
+			result = send_error(connection, server, 500, "Internal Server Error", "The document could not be rendered.");
 		}
 		else
 			result = send_response(connection, 200, "OK", NULL, &html);
 		buffer_free(&html);
-		buffer_free(&markdown);
 	}
 	else if (route.status == ROUTE_INVALID)
-		result = send_error(connection, configuration, 400, "Bad Request", "Invalid document path.");
+		result = send_error(connection, server, 400, "Bad Request", "Invalid document path.");
 	else if (route.status == ROUTE_FAILURE)
-		result = send_error(connection, configuration, 500, "Internal Server Error", "The document could not be opened.");
+		result = send_error(connection, server, 500, "Internal Server Error", "The document could not be opened.");
 	else
-		result = send_error(connection, configuration, 404, "Not Found", "No document exists at this URL.");
+		result = send_error(connection, server, 404, "Not Found", "No document exists at this URL.");
 	document_route_free(&route);
 	return result;
 }
@@ -223,7 +225,7 @@ static int http_error(struct mg_connection *connection, int status, const char *
 	if (!request || !request->request_method || !server)
 		return 1;
 	const char *reason = mg_get_response_code_text(connection, status);
-	send_error(connection, server->configuration, status, reason ? reason : "Request Failed", "The requested resource could not be served.");
+	send_error(connection, server, status, reason ? reason : "Request Failed", "The requested resource could not be served.");
 	/* This callback's convention is the inverse of begin_request: zero means handled. */
 	return 0;
 }

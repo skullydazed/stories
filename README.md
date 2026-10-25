@@ -4,12 +4,19 @@ Stories is a compact, file-backed documentation server written in C11. It render
 
 Stories serves HTTP behind a reverse proxy such as nginx for TLS and caching. FreeBSD is the primary deployment platform, macOS the development platform, and Linux the CI environment.
 
+## Design requirements
+
+Keep the memory footprint small. Allocations need a clear purpose, an explicit owner and lifetime, and appropriate size bounds. Avoid unnecessary retention and duplication; release temporary storage promptly. Bounded working buffers are acceptable when they serve a concrete purpose and keep the implementation straightforward. Consider peak memory use and explain the tradeoff before introducing caching, preloading, or additional full-document copies.
+
+Markdown, HTML templates, and static assets are editable site files. Their changes must appear on the next uncached request without rebuilding or restarting Stories. Site presentation belongs in editable files, outside the executable. These are requirements for future changes as well as the current implementation; see [Design contracts](docs/design.md).
+
 ## Documentation
 
 The [documentation home](docs/index.md) links the complete project manual:
 
 - [Getting started](docs/getting-started.md)
 - [Configuration reference](docs/configuration.md)
+- [Themes and page layout](docs/themes.md)
 - [Writing and publishing](docs/writing.md)
 - [Deployment](docs/deployment.md)
 - [Troubleshooting](docs/troubleshooting.md)
@@ -46,7 +53,7 @@ Compiler selection prefers `clang`, then `gcc`, then `cc`, while respecting expl
 
 ## Run your own site
 
-Copy [examples/stories.conf.example](examples/stories.conf.example) to `stories.conf`, create a Markdown root with `index.md`, and set a separate public asset root containing `pico.min.css`. Paths resolve relative to the configuration file. The local `stories.conf` is ignored by Git.
+Copy [examples/stories.conf.example](examples/stories.conf.example) to `stories.conf`, create a Markdown root with `index.md`, and set a separate public asset root containing `pico.min.css`. The example selects the editable [templates/page.html](templates/page.html) for the HTML layout. Paths resolve relative to the configuration file. The local `stories.conf` is ignored by Git.
 
 ```sh
 ./build/stories --check-config
@@ -60,3 +67,5 @@ Without `--config`, Stories checks `./stories.conf`, then `/etc/stories.conf`, a
 Follow [CODESTYLE.md](CODESTYLE.md) and the [design contracts](docs/design.md). Publishing content is restricted to trusted maintainers because raw HTML passes through.
 
 Stories is MIT licensed; see [LICENSE.md](LICENSE.md). The bundled Pico CSS stylesheet includes its [MIT license](assets/LICENSE.pico.md).
+
+The bundled Mustach template core includes its [BSD Zero Clause license](third_party/mustach/LICENSE.txt).

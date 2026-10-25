@@ -1,0 +1,32 @@
+<!doctype html>
+<html lang="en">
+<head>
+	<meta charset="utf-8">
+	<meta name="viewport" content="width=device-width, initial-scale=1">
+	<title>{{title}} — {{site_title}}</title>
+	<link rel="stylesheet" href="/assets/pico.min.css">
+</head>
+<body>
+	<header class="container">
+		<nav>
+			<ul>
+				<li><a href="/"><strong>{{site_title}}</strong></a></li>
+			</ul>
+			<ul>
+				{{#navigation}}
+				<li><a href="{{url}}">{{label}}</a></li>
+				{{/navigation}}
+			</ul>
+		</nav>
+	</header>
+	<main class="container">
+		{{#error}}
+		<h1>{{title}}</h1>
+		<p>{{message}}</p>
+		{{/error}}
+		{{^error}}
+{{{content}}}
+		{{/error}}
+	</main>
+</body>
+</html>

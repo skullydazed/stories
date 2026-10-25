@@ -1,5 +1,6 @@
 #include "render.h"
 #include "entities.h"
+#include "page_template.h"
 #include "url.h"
 
 #include <ctype.h>
@@ -313,27 +314,6 @@ static int text_render(MD_TEXTTYPE type, const MD_CHAR *text, MD_SIZE size, void
 	return renderer_result(renderer, buffer_html(renderer->output, text, size));
 }
 
-static bool page_open(const struct configuration *configuration, const char *title, struct buffer *output)
-{
-	buffer_puts(output, "<!doctype html>\n<html lang=\"en\"><head><meta charset=\"utf-8\"><meta name=\"viewport\" content=\"width=device-width, initial-scale=1\"><title>");
-	buffer_html(output, title, strlen(title));
-	buffer_puts(output, " — ");
-	buffer_html(output, configuration->title, strlen(configuration->title));
-	buffer_puts(output, "</title><link rel=\"stylesheet\" href=\"/assets/pico.min.css\"></head><body><header class=\"container\"><nav><ul><li><a href=\"/\"><strong>");
-	buffer_html(output, configuration->title, strlen(configuration->title));
-	buffer_puts(output, "</strong></a></li></ul><ul>");
-	for (size_t i = 0; i < configuration->navigation_count; i++)
-	{
-		const struct navigation_link *link = &configuration->navigation[i];
-		buffer_puts(output, "<li><a href=\"");
-		buffer_html(output, link->url, strlen(link->url));
-		buffer_puts(output, "\">");
-		buffer_html(output, link->label, strlen(link->label));
-		buffer_puts(output, "</a></li>");
-	}
-	return buffer_puts(output, "</ul></nav></header><main class=\"container\">\n");
-}
-
 bool render_document(const struct configuration *configuration, const char *source, const char *markdown, size_t size, struct buffer *output)
 {
 	buffer_init(output, configuration->output_limit);
@@ -381,7 +361,7 @@ bool render_document(const struct configuration *configuration, const char *sour
 	 * The complete page, including its title and shell, shares one output limit. */
 	struct buffer page;
 	buffer_init(&page, configuration->output_limit);
-	bool success = !renderer.title.failed && page_open(configuration, renderer.title.data ? renderer.title.data : "", &page) && buffer_append(&page, output->data, output->size) && buffer_puts(&page, "\n</main></body></html>\n");
+	bool success = !renderer.title.failed && page_template_render(configuration, renderer.title.data ? renderer.title.data : "", output, NULL, &page);
 	buffer_free(&renderer.title);
 	buffer_free(output);
 	*output = page;
@@ -395,5 +375,5 @@ bool render_error(const struct configuration *configuration, const char *title, 
 	/* Error pages have a separate small budget so an output-limit failure can
 	 * still produce a complete error response instead of recursively failing. */
 	buffer_init(output, 256u * 1024u);
-	return page_open(configuration, title, output) && buffer_puts(output, "<h1>") && buffer_html(output, title, strlen(title)) && buffer_puts(output, "</h1><p>") && buffer_html(output, message, strlen(message)) && buffer_puts(output, "</p></main></body></html>\n");
+	return page_template_render(configuration, title, NULL, message, output);
 }

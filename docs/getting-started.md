@@ -39,7 +39,7 @@ Open <http://127.0.0.1:8080/>. Stop the foreground process with Ctrl-C. The exam
 
 ## Create your own site
 
-Copy `examples/stories.conf.example` to `stories.conf` in the checkout root. The local `stories.conf` is ignored by Git. Its example roots are `docroot/` for Markdown and `assets/` for public assets; the latter already contains the Pico stylesheet used by the page layout.
+Copy `examples/stories.conf.example` to `stories.conf` in the checkout root. The local `stories.conf` is ignored by Git. Its example roots are `docroot/` for Markdown and `assets/` for public assets; the latter already contains the Pico stylesheet used by the page layout. The example's required `[site] template` points to `templates/page.html`, which controls the HTML layout and stylesheet links.
 
 ```sh
 cp examples/stories.conf.example stories.conf
@@ -73,6 +73,6 @@ Create `docroot/install.md` and link to it from `index.md`:
 
 Stories rewrites that link to `/install`. The Markdown file remains private; requests for `/install.md` return 404. A folder needs an authored `index.md` to have an index page.
 
-Read [Writing and publishing](writing.md) for URL rules and [Configuration](configuration.md) for the complete settings reference. For an installed service, continue with [Deployment](deployment.md).
+Read [Writing and publishing](writing.md) for URL rules, [Themes and page layout](themes.md) to customize the HTML and Pico styling, and [Configuration](configuration.md) for the complete settings reference. For an installed service, continue with [Deployment](deployment.md).
 
 [Documentation home](index.md)

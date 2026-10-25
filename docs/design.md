@@ -2,6 +2,16 @@
 
 These contracts describe the implementation boundaries that keep request handling, ownership, and failure propagation explicit. Start with [Development](development.md) for build and verification commands, or [Writing and publishing](writing.md) for the public content model.
 
+## Memory and runtime requirements
+
+Keep memory use small and predictable. Allocations need a clear purpose, an explicit owner and lifetime, appropriate size bounds, and a defined release point. Avoid retaining site data beyond its useful lifetime. Caching and preloading require a concrete benefit that justifies their memory cost and invalidation complexity; they are not default implementation choices.
+
+Bounded temporary buffers are acceptable when they serve a concrete purpose, such as separating Markdown rendering from page assembly. Consider peak live memory, including concurrent requests, before adding full-document copies. Release temporary decoding, title, and rendering storage promptly. Avoid imposing a particular buffer arrangement when a simpler implementation has reasonable, bounded memory costs. Rendering failures must still discard incomplete output rather than send partial HTML as a successful response.
+
+Document, template, and asset edits must appear on the next uncached request. They must not require a restart or rebuild. Keep presentation in editable site files rather than compiled C strings. Configuration and root selection may remain startup state, but that does not justify retaining the contents of those files.
+
+Review memory ownership, peak live allocations, and release paths when changing a subsystem. Explain material increases in memory use and the benefit they provide. Prefer straightforward code with justified memory use over either unnecessary retention or elaborate machinery whose sole purpose is eliminating a temporary allocation.
+
 ## Subsystem boundaries
 
 `configuration` owns parsed strings, directory order, and navigation entries. Parsing accepts a byte span and base directory, performs no filesystem access, and returns either a fully usable configuration or an empty object. Loading implements file discovery and bounded reading around that parser. The executable supplies fixed defaults; the same search routine accepts isolated paths in tests.
@@ -12,13 +22,15 @@ These contracts describe the implementation boundaries that keep request handlin
 
 `renderer` owns per-parse state and HTML emission. MD4C supplies borrowed, length-delimited strings, which are never assumed to be NUL-terminated or retained after callbacks. Parser-identified entities are decoded using a generated HTML5 lookup before escaping attributes or rewriting links. Rich image labels emit escaped text into `alt` attributes; ordinary raw HTML events remain verbatim elsewhere because publishers are trusted.
 
-The same parse collects plain text from the first Markdown heading for the page title. Span formatting and raw HTML tags are omitted, entities are decoded, and soft breaks become spaces. Missing or empty headings fall back to the extensionless document basename. The renderer assembles the shell after parsing, escapes the title once, and enforces the configured limit on the complete page. Temporary body, title, and page buffers remain request-owned and bounded.
+The same parse collects plain text from the first Markdown heading for the page title. Span formatting and raw HTML tags are omitted, entities are decoded, and soft breaks become spaces. Missing or empty headings fall back to the extensionless document basename. After parsing, the renderer passes the body and title to `page_template` and enforces the configured limit on the complete expanded page. Temporary body, title, and page buffers remain request-owned and bounded. The rendered body and assembled page coexist during expansion so MD4C parses once, even when a template repeats the content. Their peak memory cost must be considered alongside concurrent requests; temporary body, title, and template storage is released before sending the response.
+
+`page_template` reads the required `[site] template` file for each render and releases its bounded source buffer after expansion. The vendored Mustach core handles syntax and iteration; Stories supplies callbacks for title/site values, navigation entries, error sections, escaping, and bounded output. The HTML document, navigation markup, and error markup live in the external template. Custom emit/get callbacks avoid unbounded memory streams. Template values are borrowed for one expansion, never reparsed as templates, and ordinary substitutions use the shared HTML escaper. Only explicit raw substitutions such as `{{{content}}}` bypass escaping. Startup validates document/error branches with and without navigation, then releases the template bytes. There is no compiled-in page layout, retained template cache, or fallback template path.
 
 `server` adapts these subsystems to CivetWeb. A `begin_request` callback completes document responses or returns zero for unencoded static paths. Encoded asset paths are mapped to validated filenames and passed to CivetWeb's `mg_send_mime_file` API. CivetWeb owns connections, worker threads, and static MIME/range/HEAD response handling, with listings and script recognition disabled. An `http_error` callback sends established-request errors through the shared shell and response helper, correcting CivetWeb 1.16's default HEAD error body. That callback uses the opposite return convention: zero means the error was handled.
 
 ## Ownership and sequencing
 
-The main thread loads configuration, applies scalar CLI overrides, and either checks it or enters `server_run`. Configuration remains immutable while serving and is freed after the server returns. Startup validates disjoint roots, opens the Markdown root, builds static mappings, blocks termination signals before worker creation, initializes CivetWeb file support, and starts the listener.
+The main thread loads configuration, applies scalar CLI overrides, checks and releases the page template, and either checks the roots or enters `server_run`. Configuration remains immutable while serving and is freed after the server returns. Startup validates disjoint roots, opens the Markdown root, builds static mappings, blocks termination signals before worker creation, initializes CivetWeb file support, and starts the listener. Template edits appear on the next uncached request without restarting or rebuilding the binary.
 
 Workers inherit blocked SIGINT/SIGTERM. The main thread uses `sigwait`, so cleanup never runs in an asynchronous signal handler. On termination, `mg_stop` joins workers before application-owned descriptors or configuration are released. Partial startup failures unwind only acquired resources. SIGPIPE is ignored so a disconnected reader cannot terminate the process during a write.
 

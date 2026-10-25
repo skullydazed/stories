@@ -16,6 +16,8 @@ For a configuration diagnostic, inspect the named file, line, section, and setti
 
 Both roots must be existing directories, readable by the process account, and disjoint. Relative paths start at the configuration file's directory, not the process working directory. When moving an example config, update its relative roots. Configuration validation does not require every navigation target or configured resolution directory to exist.
 
+`[site] template` is required, including in existing configurations when upgrading. It must select a readable, nonempty regular file containing valid Mustache markup, limited to 1 MiB with no NUL bytes. The supplied layout is `templates/page.html` in a checkout or `share/stories/templates/page.html` in an installation. Template diagnostics name the selected file; see [Themes and page layout](themes.md) for supported names and sections.
+
 If the listener fails, check that its numeric address is available and its port is free. Stories supports one HTTP endpoint, with bracketed IPv6 syntax when applicable. You can use `--listen 127.0.0.1:0` to request an ephemeral port; startup reports the selected port on stdout.
 
 ## A page returns 404
@@ -43,7 +45,7 @@ Check recent link edits for malformed percent escapes in `.md` destinations, att
 
 ## The layout has no stylesheet
 
-Request `/assets/pico.min.css` directly. That file must be present in the configured asset root. The checkout includes it under `assets/`, and installations include it under `share/stories/assets`.
+The supplied template links `/assets/pico.min.css`; custom templates may select a different stylesheet. Request that stylesheet URL directly. The file must be present in the configured asset root. The checkout includes Pico under `assets/`, and installations include it under `share/stories/assets`.
 
 Stories does not search a source-tree or installed fallback directory. A missing stylesheet returns 404 without preventing startup. If other assets fail, verify their `/assets/` URL and the configured root. HTML/XHTML files, Markdown sources, directory listings, and implicit static index pages are deliberately unavailable.
 
@@ -51,7 +53,7 @@ Stories does not search a source-tree or installed fallback directory. A missing
 
 Document and asset edits appear on the next uncached request. Compare the backend's loopback response with the public proxy response. The supplied nginx example caches 200 and 301 responses for 60 seconds, so edits and redirect changes can remain stale during that interval.
 
-Configuration and navigation changes require a restart. If the entire content-root directory was replaced, restart as well: the server holds an open descriptor for that root. Atomic replacement of individual files inside the existing root is supported.
+Configuration and navigation changes require a restart. HTML template edits appear on the next uncached request, without restarting or rebuilding Stories. If the entire content-root directory was replaced, restart as well: the server holds an open descriptor for that root. Atomic replacement of individual files inside the existing root is supported.
 
 ## Build or analysis failures
 
