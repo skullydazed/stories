@@ -33,21 +33,9 @@ jobs:
           export CC=clang CXX=clang++
           python3 tools/build-dependencies.py build-deps
       - name: Analyze application and C tests
-        shell: bash
         run: |
           cmake -B build-analysis -G Ninja -DCMAKE_PREFIX_PATH="$PWD/build-deps" -DSTORIES_WARNINGS_AS_ERRORS=ON -DCMAKE_C_CLANG_TIDY=clang-tidy
-          cmake --build build-analysis --clean-first --parallel 2 2>&1 | tee build-analysis/analysis.log
-      - name: Save analyzer log and diagnostics
-        if: always()
-        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
-        with:
-          name: clang-analysis
-          path: |
-            build-analysis/analysis.log
-            build-analysis/CMakeFiles/CMakeConfigureLog.yaml
-            build-analysis/CMakeFiles/CMakeOutput.log
-            build-analysis/CMakeFiles/CMakeError.log
-          retention-days: 7
+          cmake --build build-analysis --clean-first --parallel 2
   sanitizers:
     name: Linux sanitizers and fuzzing
     runs-on: ubuntu-22.04

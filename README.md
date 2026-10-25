@@ -117,7 +117,7 @@ Provider-neutral Linux sanitizer and fuzzing commands are in [tools/ci.sh](tools
 
 ## GitHub Actions and releases
 
-[CI](.github/workflows/ci.yml) runs on pull requests, pushes to `main`, and merge queue updates. It runs subsystem and HTTP tests on Linux, both macOS architectures, and FreeBSD in a native VM, plus Clang static analysis, ASan, UBSan, and all three libFuzzer smoke tests on Linux. Clang's analyzer checks run through clang-tidy and CMake, print findings and diagnostic paths directly in the CI log, and fail the job on findings. Dependencies are built before analysis. The platform jobs also stage an installation, create an archive, and rerun the HTTP suite against the extracted binary. Analyzer logs, test logs, fuzz findings, and binary archives are retained as workflow artifacts for seven days. Actions are pinned to commit IDs.
+[CI](.github/workflows/ci.yml) runs on pull requests, pushes to `main`, and merge queue updates. It runs subsystem and HTTP tests on Linux, both macOS architectures, and FreeBSD in a native VM, plus Clang static analysis, ASan, UBSan, and all three libFuzzer smoke tests on Linux. Clang's analyzer checks run through clang-tidy and CMake, print findings and diagnostic paths directly in the CI log, and fail the job on findings. Dependencies are built before analysis. The platform jobs also stage an installation, create an archive, and rerun the HTTP suite against the extracted binary. Test logs, fuzz findings, and binary archives are retained as workflow artifacts for seven days. Actions are pinned to commit IDs.
 
 [Release](.github/workflows/release.yml) runs from **Actions → Release → Run workflow** on `main`. Select **patch**, **minor**, or **major** in the **Release type** dropdown. Python Semantic Release reads the Git release history and calculates the version number for that release type. The workflow supplies that version to CMake, builds and tests every platform, then creates the tag and publishes the release with its archives and SHA-256 checksums. No version edits, bump commits, or manual tagging are required. Release runs are serialized so concurrent requests cannot allocate the same version.
 
@@ -147,7 +147,7 @@ cmake -B build-analysis -G Ninja -DSTORIES_WARNINGS_AS_ERRORS=ON -DCMAKE_C_CLANG
 cmake --build build-analysis --clean-first --parallel 2
 ```
 
-Only the `clang-analyzer-*` checks are enabled. The optional Annex K API-advice checker is excluded to preserve POSIX portability. CMake supplies the compiler flags and include paths, and the clean rebuild ensures cached objects do not skip analysis. Diagnostics are native compiler-style text; CI also saves them in `build-analysis/analysis.log`.
+Only the `clang-analyzer-*` checks are enabled. The optional Annex K API-advice checker is excluded to preserve POSIX portability. CMake supplies the compiler flags and include paths, and the clean rebuild ensures cached objects do not skip analysis. Diagnostics are native compiler-style text printed directly in the CI log.
 
 ```sh
 cmake -B build-sanitize -DSTORIES_SANITIZERS=ON -DSTORIES_WARNINGS_AS_ERRORS=ON

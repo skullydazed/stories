@@ -16,15 +16,15 @@ static bool missing_error(int error)
 
 /* Walk each component with O_NOFOLLOW. Resolving a string with realpath and
  * opening it later would allow a rename/symlink race between those operations. */
-static int open_document(int root_fd, const char *path)
+static int open_document(int root_fd, const char *path, size_t length)
 {
 	char copy[STORIES_PATH_LIMIT];
-	if (strlen(path) >= sizeof(copy))
+	if (length >= sizeof(copy))
 	{
 		errno = ENAMETOOLONG;
 		return -1;
 	}
-	strcpy(copy, path);
+	memcpy(copy, path, length + 1);
 	/* Set close-on-exec atomically, without a dup/fcntl window between workers. */
 	int parent = fcntl(root_fd, F_DUPFD_CLOEXEC, 0);
 	if (parent < 0)
@@ -68,7 +68,10 @@ static int open_document(int root_fd, const char *path)
 
 static bool try_document(int root_fd, const char *source, bool redirect, struct document_route *route)
 {
-	int fd = open_document(root_fd, source);
+	size_t length = strlen(source);
+	if (length >= sizeof(route->source))
+		return false;
+	int fd = open_document(root_fd, source, length);
 	if (fd < 0)
 	{
 		if (!missing_error(errno) && errno != ENAMETOOLONG)
@@ -76,7 +79,7 @@ static bool try_document(int root_fd, const char *source, bool redirect, struct 
 		return false;
 	}
 	route->fd = fd;
-	strcpy(route->source, source);
+	memcpy(route->source, source, length + 1);
 	if (!url_document_location(source, &route->location))
 	{
 		route->status = ROUTE_FAILURE;

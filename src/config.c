@@ -258,7 +258,7 @@ bool configuration_parse(const char *data, size_t size, const char *base_directo
 				goto fail;
 			}
 			*closing = '\0';
-			strcpy(section, line + 1);
+			memcpy(section, line + 1, length + 1);
 			if (strcmp(section, "server") && strcmp(section, "content") && strcmp(section, "site") && strcmp(section, "navigation") && strcmp(section, "assets"))
 			{
 				reason = "unknown section";
@@ -425,19 +425,25 @@ bool configuration_load_search(const char *explicit_path, const char *const *sea
 		goto done;
 	}
 	/* Preserve the selected file's directory even when the file itself is a symlink. */
+	size_t path_length;
 	if (*selected == '/')
 	{
-		if (strlen(selected) >= sizeof(absolute))
+		path_length = strlen(selected);
+		if (path_length >= sizeof(absolute))
 			goto path_error;
-		strcpy(absolute, selected);
+		memcpy(absolute, selected, path_length + 1);
 	}
 	else
 	{
 		char cwd[STORIES_PATH_LIMIT];
-		if (!getcwd(cwd, sizeof(cwd)) || snprintf(absolute, sizeof(absolute), "%s/%s", cwd, selected) >= (int)sizeof(absolute))
+		if (!getcwd(cwd, sizeof(cwd)))
 			goto path_error;
+		int length = snprintf(absolute, sizeof(absolute), "%s/%s", cwd, selected);
+		if (length < 0 || (size_t)length >= sizeof(absolute))
+			goto path_error;
+		path_length = (size_t)length;
 	}
-	strcpy(base, absolute);
+	memcpy(base, absolute, path_length + 1);
 	char *slash = strrchr(base, '/');
 	if (slash == base)
 		slash[1] = '\0';
