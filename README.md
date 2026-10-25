@@ -10,10 +10,10 @@ Stories serves HTTP behind a reverse proxy such as nginx, which handles TLS and 
 - CivetWeb 1.16 or newer, including development headers and file-serving support.
 - MD4C 0.4.8 or newer, including development headers. Stories uses the parser API directly.
 - Meson 1.3 or newer, Ninja, and Python 3.8 or newer for building and tests.
-- pkgconf for build-time dependency discovery.
+- Optional pkgconf for build-time dependency discovery; compiler lookup is used when it is unavailable.
 - Pico CSS 2.1.1 is included locally with its MIT license; there is no CDN or Node dependency.
 
-Normal Meson builds use installed libraries and never download dependency sources. `PKG_CONFIG=pkgconf` selects pkgconf for Meson's dependency discovery. Libraries without discovery metadata use compiler lookup instead. Set `PKG_CONFIG_PATH`, `CFLAGS`, or `LDFLAGS` when libraries are outside the standard search paths. CI and release builds explicitly use [tools/build-dependencies.py](tools/build-dependencies.py) to resolve the latest upstream CivetWeb and MD4C release tags on every run and build static libraries in an isolated prefix. The release manifest records the selected tags, commits, and downloaded source checksums. CI installs the latest Meson available for its Python version.
+Normal Meson builds use installed libraries and never download dependency sources. Meson discovers dependencies through the installed pkgconf tools, with compiler lookup for libraries without discovery metadata. Set `PKG_CONFIG_PATH`, `CFLAGS`, or `LDFLAGS` when libraries are outside the standard search paths. CI and release builds explicitly use [tools/build-dependencies.py](tools/build-dependencies.py) to resolve the latest upstream CivetWeb and MD4C release tags on every run and build static libraries in an isolated prefix. The release manifest records the selected tags, commits, and downloaded source checksums. CI installs the latest Meson available for its Python version.
 
 On macOS:
 
@@ -26,10 +26,9 @@ Use the corresponding development packages on FreeBSD or Linux. The server requi
 ## Build and run
 
 ```sh
-export PKG_CONFIG=pkgconf
 meson setup build
 meson compile -C build
-meson test -C build --print-errorlogs
+meson test -C build
 ```
 
 Copy [stories.conf.example](stories.conf.example) to `stories.conf`, create separate Markdown and asset roots, and adjust paths and navigation links. The local `stories.conf` is ignored by Git. Relative filesystem paths resolve against the selected configuration file's directory, independently of the process working directory.

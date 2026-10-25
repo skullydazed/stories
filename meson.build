@@ -49,6 +49,7 @@ fixture_argument = '-DTEST_FIXTURE_DIR="' + fixture_directory + '"'
 if get_option('tests')
   unit_tests = executable('test-subsystems', 'tests/test_subsystems.c', dependencies: core_dependency, c_args: fixture_argument)
   test('subsystems', unit_tests, suite: 'unit')
+  test('packaging-arguments', python, args: files('tests/test_package_release.py'), suite: 'unit')
   test('http', python, args: [files('tests/test_http.py'), stories.full_path()], depends: stories, timeout: 90, suite: 'integration')
 endif
 

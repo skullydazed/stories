@@ -23,7 +23,7 @@ def main():
     build = pathlib.Path(sys.argv[1]).resolve()
     dependencies = pathlib.Path(sys.argv[2]).resolve()
     target = sys.argv[3]
-    if not re.fullmatch(r'[a-z0-9]+(?:-[a-z0-9]+)+', target):
+    if not re.fullmatch(r'[a-z0-9]+(?:-[a-z0-9_]+)+', target):
         raise SystemExit('invalid release target: ' + target)
     info = json.loads(subprocess.check_output(['meson', 'introspect', str(build), '--projectinfo'], text=True))
     version = info['version']
