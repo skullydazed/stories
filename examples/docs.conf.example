@@ -1,0 +1,16 @@
+# Serve the project's documentation directly from a checkout or installation.
+# Paths resolve relative to this file, independently of the working directory.
+[content]
+root = ../docs
+
+[assets]
+root = ../assets
+
+[site]
+title = Stories Documentation
+
+[navigation]
+Getting started = /getting-started
+Configuration = /configuration
+Deployment = /deployment
+Development = /development

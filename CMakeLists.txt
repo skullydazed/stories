@@ -113,7 +113,8 @@ target_link_libraries(stories PRIVATE stories-core CivetWeb::CivetWeb Threads::T
 
 install(TARGETS stories RUNTIME DESTINATION "${CMAKE_INSTALL_BINDIR}")
 install(FILES assets/pico.min.css assets/LICENSE.pico.md DESTINATION "${CMAKE_INSTALL_DATADIR}/stories/assets")
-install(FILES examples/stories.conf.example examples/stories.freebsd examples/nginx.conf DESTINATION "${CMAKE_INSTALL_DATADIR}/stories/examples")
+install(FILES examples/stories.conf.example examples/docs.conf.example examples/stories.freebsd examples/nginx.conf DESTINATION "${CMAKE_INSTALL_DATADIR}/stories/examples")
+install(DIRECTORY docs/ DESTINATION "${CMAKE_INSTALL_DATADIR}/stories/docs" FILES_MATCHING PATTERN "*.md")
 install(FILES LICENSE.md DESTINATION "${CMAKE_INSTALL_DATADIR}/licenses/stories")
 
 if(BUILD_TESTING)

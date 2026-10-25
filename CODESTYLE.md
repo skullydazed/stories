@@ -86,4 +86,4 @@ Use C tests for subsystem contracts and Python's standard library for HTTP and p
 
 Keep the resolver, link rewriter, and config parser usable by deterministic libFuzzer harnesses. Exercise arbitrary byte inputs and semantic invariants alongside ASan and UBSan. Add regression coverage at the boundary where a bug occurs: HTTP decoding bugs need HTTP tests even when the decoded-path resolver already has a fuzz harness. Keep working corpora and artifacts in the build tree, and add minimized findings to regression tests and seeds.
 
-Run the checks appropriate to the change. See [README.md](README.md#tests-and-fuzzing) for build, integration, sanitizer, and fuzzing commands.
+Run the checks appropriate to the change. See [docs/development.md](docs/development.md) for build, integration, sanitizer, and fuzzing commands.

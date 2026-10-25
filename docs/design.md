@@ -1,5 +1,7 @@
 # Design contracts
 
+These contracts describe the implementation boundaries that keep request handling, ownership, and failure propagation explicit. Start with [Development](development.md) for build and verification commands, or [Writing and publishing](writing.md) for the public content model.
+
 ## Subsystem boundaries
 
 `configuration` owns parsed strings, directory order, and navigation entries. Parsing accepts a byte span and base directory, performs no filesystem access, and returns either a fully usable configuration or an empty object. Loading implements file discovery and bounded reading around that parser. The executable supplies fixed defaults; the same search routine accepts isolated paths in tests.
@@ -39,3 +41,5 @@ Configuration is startup state; content is read on every request. Publish comple
 C tests exercise production subsystem contracts. Python tests drive the built binary using temporary roots and ephemeral ports. Readiness and shutdown deadlines prevent indefinite waits. Raw socket checks verify HEAD bodies independently of client-library behavior.
 
 Fuzz harnesses use the production resolver, link rewriter, and parser, checking semantic invariants alongside sanitizers. Resolver setup opens an immutable fixture root once. Inputs do not write files, start servers, or open network connections. A separately instrumented core keeps libFuzzer's main and coverage runtime out of the server binary. Checked-in seeds remain immutable; working corpora and artifacts live in the build tree.
+
+[Development](development.md) · [Configuration](configuration.md) · [Documentation home](index.md)
