@@ -32,7 +32,6 @@ jobs:
             runner: ubuntu-24.04
     env:
       RELEASE_TAG: ${{ inputs.tag }}
-      PKG_CONFIG: pkgconf
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
@@ -46,12 +45,11 @@ jobs:
         if: runner.os == 'Linux' && matrix.target != 'freebsd14-amd64'
         run: |
           sudo apt-get update
-          sudo apt-get install -y clang cmake git ninja-build pkgconf python3-pip
-          python3 -m pip install --upgrade meson
+          sudo apt-get install -y clang cmake git ninja-build pkgconf python3
       - name: Install macOS tools
         if: runner.os == 'macOS'
         run: |
-          brew install meson ninja pkgconf cmake
+          brew install cmake ninja pkgconf
           echo 'MACOSX_DEPLOYMENT_TARGET=15.0' >> "$GITHUB_ENV"
       - name: Build, test, and package
         if: matrix.target != 'freebsd14-amd64'
@@ -60,12 +58,9 @@ jobs:
         run: |
           export CC=clang CXX=clang++
           python3 tools/build-dependencies.py build-deps
-          export PKG_CONFIG_LIBDIR="$PWD/build-deps/lib/pkgconfig:$PWD/build-deps/share/pkgconfig"
-          export CFLAGS="-I$PWD/build-deps/include"
-          export LDFLAGS="-L$PWD/build-deps/lib"
-          meson setup build-release --buildtype=release --prefix=/ --libdir=lib -Dwerror=true
-          meson compile -C build-release
-          meson test -C build-release --print-errorlogs
+          cmake -B build-release -G Ninja -DCMAKE_BUILD_TYPE=Release -DCMAKE_PREFIX_PATH="$PWD/build-deps" -DSTORIES_STATIC_DEPENDENCIES=ON -DSTORIES_WARNINGS_AS_ERRORS=ON
+          cmake --build build-release --parallel 2
+          ctest --test-dir build-release --output-on-failure --parallel 3
           python3 tools/package-release.py build-release build-deps "$TARGET"
       - name: Build, test, and package on FreeBSD
         if: matrix.target == 'freebsd14-amd64'
@@ -73,25 +68,26 @@ jobs:
         with:
           release: '14.4'
           arch: x86_64
-          envs: RELEASE_TAG PKG_CONFIG
-          prepare: pkg install -y python3 meson ninja pkgconf cmake git
+          envs: RELEASE_TAG
+          prepare: pkg install -y python3 ninja pkgconf cmake git
           run: |
             set -eu
             export CC=clang CXX=clang++
             python3 tools/build-dependencies.py build-deps
-            export PKG_CONFIG_LIBDIR="$PWD/build-deps/lib/pkgconfig:$PWD/build-deps/share/pkgconfig"
-            export CFLAGS="-I$PWD/build-deps/include"
-            export LDFLAGS="-L$PWD/build-deps/lib"
-            meson setup build-release --buildtype=release --prefix=/ --libdir=lib -Dwerror=true
-            meson compile -C build-release
-            meson test -C build-release --print-errorlogs
+            cmake -B build-release -G Ninja -DCMAKE_BUILD_TYPE=Release -DCMAKE_PREFIX_PATH="$PWD/build-deps" -DSTORIES_STATIC_DEPENDENCIES=ON -DSTORIES_WARNINGS_AS_ERRORS=ON
+            cmake --build build-release --parallel 2
+            ctest --test-dir build-release --output-on-failure --parallel 3
             python3 tools/package-release.py build-release build-deps freebsd14-amd64
       - name: Save test diagnostics
         if: always()
         uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
           name: logs-${{ matrix.target }}
-          path: build-release/meson-logs/
+          path: |
+            build-release/CMakeFiles/CMakeConfigureLog.yaml
+            build-release/CMakeFiles/CMakeOutput.log
+            build-release/CMakeFiles/CMakeError.log
+            build-release/Testing/Temporary/
           retention-days: 7
       - name: Upload release archives
         uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2

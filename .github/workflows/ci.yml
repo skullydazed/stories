@@ -20,8 +20,6 @@ jobs:
     name: Linux sanitizers and fuzzing
     runs-on: ubuntu-22.04
     timeout-minutes: 15
-    env:
-      PKG_CONFIG: pkgconf
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
@@ -29,15 +27,12 @@ jobs:
       - name: Install tools
         run: |
           sudo apt-get update
-          sudo apt-get install -y clang cmake git ninja-build pkgconf python3-pip
-          python3 -m pip install --upgrade meson
+          sudo apt-get install -y clang cmake git ninja-build pkgconf python3
       - name: Test with ASan, UBSan, and libFuzzer
         run: |
           export CC=clang CXX=clang++
           python3 tools/build-dependencies.py build-deps
-          export PKG_CONFIG_LIBDIR="$PWD/build-deps/lib/pkgconfig:$PWD/build-deps/share/pkgconfig"
-          export CFLAGS="-I$PWD/build-deps/include"
-          export LDFLAGS="-L$PWD/build-deps/lib"
+          export CMAKE_PREFIX_PATH="$PWD/build-deps"
           tools/ci.sh
       - name: Save test diagnostics and fuzz findings
         if: always()
@@ -45,7 +40,13 @@ jobs:
         with:
           name: sanitizer-logs
           path: |
-            build-ci/meson-logs/
-            build-ci-fuzz/meson-logs/
+            build-ci/CMakeFiles/CMakeConfigureLog.yaml
+            build-ci/CMakeFiles/CMakeOutput.log
+            build-ci/CMakeFiles/CMakeError.log
+            build-ci/Testing/Temporary/
+            build-ci-fuzz/CMakeFiles/CMakeConfigureLog.yaml
+            build-ci-fuzz/CMakeFiles/CMakeOutput.log
+            build-ci-fuzz/CMakeFiles/CMakeError.log
+            build-ci-fuzz/Testing/Temporary/
             build-ci-fuzz/fuzz-artifacts/
           retention-days: 7

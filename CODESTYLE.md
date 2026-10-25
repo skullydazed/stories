@@ -80,7 +80,7 @@ Let CivetWeb handle connections, worker threads, and static-file response mechan
 
 ## Portability and verification
 
-Write C11 with `_POSIX_C_SOURCE=200809L`. Isolate additional platform feature definitions in the build configuration. FreeBSD is the primary deployment platform, macOS the development platform, and Linux the CI environment. Check required library interfaces in Meson and give clear errors for explicitly requested unsupported features.
+Write C11 with `_POSIX_C_SOURCE=200809L`. Isolate additional platform feature definitions in the build configuration. FreeBSD is the primary deployment platform, macOS the development platform, and Linux the CI environment. Check required library interfaces in CMake and give clear errors for explicitly requested unsupported features.
 
 Use C tests for subsystem contracts and Python's standard library for HTTP and process integration tests. Test observable behavior, ownership transitions, and failure cases through production entrypoints. Use isolated temporary resources and bounded readiness/shutdown waits. Check HEAD bodies on the wire rather than relying solely on a client library that suppresses them.
 

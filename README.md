@@ -9,16 +9,16 @@ Stories serves HTTP behind a reverse proxy such as nginx, which handles TLS and 
 - A C11 compiler, POSIX.1-2008 interfaces, and pthreads.
 - CivetWeb 1.16 or newer, including development headers and file-serving support.
 - MD4C 0.4.8 or newer, including development headers. Stories uses the parser API directly.
-- Meson 1.3 or newer, Ninja, and Python 3.8 or newer for building and tests.
-- Optional pkgconf for build-time dependency discovery; compiler lookup is used when it is unavailable.
+- CMake 3.20 or newer, a supported build tool such as Make or Ninja, and Python 3.8 or newer for building and tests.
+- Optional pkgconf for build-time dependency discovery; CMake searches for headers and libraries directly when it is unavailable.
 - Pico CSS 2.1.1 is included locally with its MIT license; there is no CDN or Node dependency.
 
-Normal Meson builds use installed libraries and never download dependency sources. Meson discovers dependencies through the installed pkgconf tools, with compiler lookup for libraries without discovery metadata. Set `PKG_CONFIG_PATH`, `CFLAGS`, or `LDFLAGS` when libraries are outside the standard search paths. CI and release builds explicitly use [tools/build-dependencies.py](tools/build-dependencies.py) to resolve the latest upstream CivetWeb and MD4C release tags on every run and build static libraries in an isolated prefix. The release manifest records the selected tags, commits, and downloaded source checksums. CI installs the latest Meson available for its Python version.
+Normal CMake builds use installed libraries and never download dependency sources. CMake uses pkgconf metadata when available and searches directly for headers and libraries otherwise. Use `CMAKE_PREFIX_PATH` when dependencies are installed outside standard prefixes. CI and release builds explicitly use [tools/build-dependencies.py](tools/build-dependencies.py) to resolve the latest upstream CivetWeb and MD4C release tags on every run and build static libraries in an isolated prefix. The release manifest records the selected tags, commits, and downloaded source checksums. CI installs CMake through the platform's package manager.
 
 On macOS:
 
 ```sh
-brew install meson pkgconf civetweb md4c
+brew install cmake pkgconf civetweb md4c
 ```
 
 Use the corresponding development packages on FreeBSD or Linux. The server requires CivetWeb's `mg_get_server_ports()` API to report the bound port.
@@ -26,10 +26,12 @@ Use the corresponding development packages on FreeBSD or Linux. The server requi
 ## Build and run
 
 ```sh
-meson setup build
-meson compile -C build
-meson test -C build
+cmake -B build
+cmake --build build
+ctest --test-dir build
 ```
+
+Compiler selection prefers `clang`, then `gcc`, then `cc`. Explicit compiler settings and toolchain files take precedence. Tests are enabled by default.
 
 Copy [stories.conf.example](stories.conf.example) to `stories.conf`, create separate Markdown and asset roots, and adjust paths and navigation links. The local `stories.conf` is ignored by Git. Relative filesystem paths resolve against the selected configuration file's directory, independently of the process working directory.
 
@@ -102,12 +104,12 @@ Stories completes all document responses, so missing documents never fall throug
 ## Install and deploy
 
 ```sh
-meson setup build-release --buildtype=release --prefix=/usr/local -Dtests=false
-meson compile -C build-release
-meson install -C build-release
+cmake -B build-release -DCMAKE_BUILD_TYPE=Release -DCMAKE_INSTALL_PREFIX=/usr/local -DBUILD_TESTING=OFF
+cmake --build build-release
+cmake --install build-release
 ```
 
-Meson installs the binary, Pico stylesheet and license, example configuration, and project license. The stylesheet is installed under `/usr/local/share/stories/assets` with the prefix above. Configure `[assets] root` to that directory or copy the stylesheet into your chosen asset root. Installation does not overwrite `/etc/stories.conf`, create deployment roots, or start services. The server serves only the explicitly configured asset root.
+CMake installs the binary, Pico stylesheet and license, example configuration, and project license. The stylesheet is installed under `/usr/local/share/stories/assets` with the prefix above. Configure `[assets] root` to that directory or copy the stylesheet into your chosen asset root. Installation does not overwrite `/etc/stories.conf`, create deployment roots, or start services. The server serves only the explicitly configured asset root.
 
 Run as an unprivileged account with read access to content and public assets. See [examples/stories.freebsd](examples/stories.freebsd) for rc.d supervision and [examples/nginx.conf](examples/nginx.conf) for TLS and caching. Adjust paths, ownership, hostname, certificates, and cache directories. Proxy caching can delay content updates and permanent redirect changes.
 
@@ -117,7 +119,7 @@ Provider-neutral Linux sanitizer and fuzzing commands are in [tools/ci.sh](tools
 
 [CI](.github/workflows/ci.yml) runs on pull requests, pushes to `main`, and merge queue updates. It runs subsystem and HTTP tests on Linux, both macOS architectures, and FreeBSD in a native VM, plus ASan, UBSan, and all three libFuzzer smoke tests on Linux. The platform jobs also stage an installation, create an archive, and rerun the HTTP suite against the extracted binary. Logs, fuzz findings, and binary archives are retained as workflow artifacts for seven days. Actions are pinned to commit IDs.
 
-[Release](.github/workflows/release.yml) runs from **Actions → Release → Run workflow** on `main`. Select **patch**, **minor**, or **major** in the **Release type** dropdown. Python Semantic Release reads the Git release history and calculates the version number for that release type. The workflow supplies that version to Meson, builds and tests every platform, then creates the tag and publishes the release with its archives and SHA-256 checksums. No version edits, bump commits, or manual tagging are required. Release runs are serialized so concurrent requests cannot allocate the same version.
+[Release](.github/workflows/release.yml) runs from **Actions → Release → Run workflow** on `main`. Select **patch**, **minor**, or **major** in the **Release type** dropdown. Python Semantic Release reads the Git release history and calculates the version number for that release type. The workflow supplies that version to CMake, builds and tests every platform, then creates the tag and publishes the release with its archives and SHA-256 checksums. No version edits, bump commits, or manual tagging are required. Release runs are serialized so concurrent requests cannot allocate the same version.
 
 Every platform builds the same resolved commit; only the final publication job has release write permission. An existing release is never overwritten; if publication fails after creating a draft, inspect that draft before rerunning. `VERSION` contains `0.0.0` for ordinary development builds and is stamped automatically during release builds.
 
@@ -134,25 +136,25 @@ Extract the archive, copy `share/stories/examples/stories.conf.example` to your 
 
 ## Tests and fuzzing
 
-`meson test` runs C subsystem tests and a Python standard-library HTTP suite against the built binary. Tests use a small checked-in corpus, isolated temporary roots, ephemeral ports, readiness polling, and bounded cleanup. They do not require or modify the ignored EPIC corpus. Discovery tests use the production search routine with isolated candidate files rather than changing `/etc`.
+`ctest --test-dir build` runs C subsystem tests and a Python standard-library HTTP suite against the built binary. Tests use a small checked-in corpus, isolated temporary roots, ephemeral ports, readiness polling, and bounded cleanup. They do not require or modify the ignored EPIC corpus. Discovery tests use the production search routine with isolated candidate files rather than changing `/etc`.
 
 The HTTP suite checks redirects, indexes, GET/HEAD wire parity, static delegation and ranges, script disabling, root isolation, live updates, source/output limits, CLI behavior, failed startup, and shutdown under concurrent traffic.
 
 ```sh
-CC=clang meson setup build-sanitize -Db_sanitize=address,undefined -Db_lundef=false -Dwerror=true
-meson compile -C build-sanitize
-meson test -C build-sanitize --print-errorlogs
+cmake -B build-sanitize -DSTORIES_SANITIZERS=ON -DSTORIES_WARNINGS_AS_ERRORS=ON
+cmake --build build-sanitize
+ctest --test-dir build-sanitize --output-on-failure
 ```
 
 Three opt-in libFuzzer targets exercise the production resolver, link rewriter, and config parser. They consume arbitrary byte spans with deterministic fixtures and ASan/UBSan instrumentation in the tested application code. The resolver consumes CivetWeb-decoded paths; link rewriting separately exercises percent-encoded destinations.
 
 ```sh
-CC=clang meson setup build-fuzz -Dfuzzing=true -Db_sanitize=address,undefined -Db_lundef=false
-meson compile -C build-fuzz
-meson test -C build-fuzz --suite fuzz --print-errorlogs
+cmake -B build-fuzz -DSTORIES_FUZZING=ON
+cmake --build build-fuzz
+ctest --test-dir build-fuzz --label-regex fuzz --output-on-failure
 ```
 
-Apple Clang may lack libFuzzer. On macOS install LLVM with `brew install llvm` and use `CC="$(brew --prefix llvm)/bin/clang"` when creating the fuzz build. Meson checks runtime support and fails clearly if explicitly requested fuzzing is unavailable. Normal builds do not require libFuzzer.
+Apple Clang may lack libFuzzer. On macOS install LLVM with `brew install llvm` and add `-DCMAKE_C_COMPILER="$(brew --prefix llvm)/bin/clang"` when configuring the fuzz build. CMake checks runtime support and fails clearly if explicitly requested fuzzing is unavailable. Normal builds do not require libFuzzer.
 
 Smoke tests run for 30 seconds per target, never modify checked-in seeds, and save crash artifacts beneath the build directory. For a longer session:
 

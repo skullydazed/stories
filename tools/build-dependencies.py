@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """Build the latest released static libraries for CI and release archives.
 
-Normal Meson builds continue to use installed libraries. This opt-in helper needs
+Normal CMake builds continue to use installed libraries. This opt-in helper needs
 CMake, Ninja, Git, a C/C++ toolchain, and network access to GitHub.
 """
 

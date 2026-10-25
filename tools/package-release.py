@@ -2,7 +2,6 @@
 """Stage, check, and archive a tested release build; no publication side effects."""
 
 import hashlib
-import json
 import os
 import pathlib
 import re
@@ -25,8 +24,7 @@ def main():
     target = sys.argv[3]
     if not re.fullmatch(r'[a-z0-9]+(?:-[a-z0-9_]+)+', target):
         raise SystemExit('invalid release target: ' + target)
-    info = json.loads(subprocess.check_output(['meson', 'introspect', str(build), '--projectinfo'], text=True))
-    version = info['version']
+    version = (build / 'stories-version.txt').read_text(encoding='ascii').strip()
     if not re.fullmatch(r'\d+\.\d+\.\d+(?:-[a-zA-Z0-9.-]+)?', version):
         raise SystemExit('invalid release version: ' + version)
     if (os.environ.get('RELEASE_TAG') or 'v' + version) != 'v' + version:
@@ -37,8 +35,8 @@ def main():
     name = f'stories-{version}-{target}'
     with tempfile.TemporaryDirectory(prefix='stories-package-') as temporary:
         staging = pathlib.Path(temporary) / 'stage'
-        # The release build uses --prefix=/; DESTDIR keeps installation isolated.
-        run('meson', 'install', '-C', str(build), '--no-rebuild', '--destdir', str(staging))
+        # Override the install prefix so staging never writes to system paths.
+        run('cmake', '--install', str(build), '--prefix', str(staging))
         shutil.copytree(dependencies / 'licenses', staging / 'share/licenses/dependencies')
         shutil.copyfile(root / 'README.md', staging / 'README.md')
         archive = output / (name + '.tar.gz')

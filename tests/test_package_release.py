@@ -2,7 +2,6 @@
 
 import contextlib
 import importlib.util
-import json
 import pathlib
 import re
 import sys
@@ -30,7 +29,9 @@ class ReleaseArguments(unittest.TestCase):
         self.addCleanup(stack.close)
         stack.enter_context(patch.object(PACKAGE, '__file__', str(self.root / 'tools/package-release.py')))
         stack.enter_context(patch.dict('os.environ', {'RELEASE_TAG': 'v1.2.3'}))
-        self.metadata = stack.enter_context(patch.object(PACKAGE.subprocess, 'check_output', return_value=json.dumps({'version': '1.2.3'})))
+        (self.root / 'build').mkdir()
+        (self.root / 'build/stories-version.txt').write_text('1.2.3\n', encoding='ascii')
+        self.metadata = stack.enter_context(patch.object(PACKAGE.subprocess, 'check_output'))
         self.install = stack.enter_context(patch.object(PACKAGE, 'run', side_effect=InstallationReached))
 
     def invoke(self, target):
@@ -46,7 +47,7 @@ class ReleaseArguments(unittest.TestCase):
                 self.install.reset_mock()
                 with self.assertRaises(InstallationReached):
                     self.invoke(target)
-                self.assertEqual(self.install.call_args.args[:2], ('meson', 'install'))
+                self.assertEqual(self.install.call_args.args[:2], ('cmake', '--install'))
 
     def test_unsafe_targets_are_rejected_before_running_tools(self):
         for target in ['../linux-x86_64', '/linux-x86_64', '-linux-x86_64', 'linux/x86_64', 'linux-x86_64\njunk']:
