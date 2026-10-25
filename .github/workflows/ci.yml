@@ -32,9 +32,9 @@ jobs:
         run: |
           export CC=clang CXX=clang++
           python3 tools/build-dependencies.py build-deps
-      - name: Analyze application and C tests
+      - name: Analyze application and tests
         run: |
-          cmake -B build-analysis -G Ninja -DCMAKE_PREFIX_PATH="$PWD/build-deps" -DSTORIES_WARNINGS_AS_ERRORS=ON -DCMAKE_C_CLANG_TIDY=clang-tidy
+          cmake -B build-analysis -G Ninja -DCMAKE_PREFIX_PATH="$PWD/build-deps" -DSTORIES_WARNINGS_AS_ERRORS=ON -DCMAKE_C_CLANG_TIDY=clang-tidy -DCMAKE_CXX_CLANG_TIDY=clang-tidy
           cmake --build build-analysis --clean-first --parallel 2
   sanitizers:
     name: Linux sanitizers and fuzzing

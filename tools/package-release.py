@@ -72,6 +72,9 @@ def main():
             raise SystemExit('installed stylesheet differs from the bundled asset')
         if (extracted / 'share/stories/templates/page.html').read_bytes() != (root / 'templates/page.html').read_bytes():
             raise SystemExit('installed page template differs from the source template')
+        for relative in ['share/licenses/stories/inja/LICENSE', 'share/licenses/stories/inja/UPSTREAM.txt', 'share/licenses/stories/nlohmann-json/LICENSE.MIT']:
+            if not (extracted / relative).is_file():
+                raise SystemExit('release is missing dependency provenance: ' + relative)
         run(str(binary), '--config', str(config), '--check-config')
         run(str(binary), '--config', str(extracted / 'share/stories/examples/docs.conf.example'), '--check-config')
     checksum = hashlib.sha256(archive.read_bytes()).hexdigest()

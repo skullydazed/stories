@@ -429,9 +429,8 @@ class HttpTests(unittest.TestCase):
 <html data-theme="dark">
 <head><title>{{title}} | {{site_title}}</title><link rel="stylesheet" href="/assets/custom.css"></head>
 <body>
-<nav>{{#navigation}}<a href='{{url}}'>{{label}}</a>{{/navigation}}{{^navigation}}No navigation{{/navigation}}</nav>
-{{#error}}<aside>{{title}}: {{message}}</aside>{{/error}}
-{{^error}}<article>{{{content}}}</article>{{/error}}
+<nav>{% if navigation %}{% for link in navigation %}<a href='{{link.url}}'>{{link.label}}</a>{% endfor %}{% else %}No navigation{% endif %}</nav>
+{% if error %}<aside>{{title}}: {{message}}</aside>{% else %}<article>{{content()}}</article>{% endif %}
 <footer>My custom layout</footer>
 </body>
 </html>
@@ -445,7 +444,7 @@ class HttpTests(unittest.TestCase):
         self.assertIn(b'<html data-theme="dark">', body)
         self.assertIn(b' | Site &amp; &lt;title&gt;</title>', body)
         self.assertIn(b'<link rel="stylesheet" href="/assets/custom.css">', body)
-        self.assertIn(b"<a href='/first?x=1&amp;y=2'>One &amp; &lt;first&gt;</a><a href='/second&#39;quoted'>Two</a>", body)
+        self.assertIn(b"<a href='/first?x=1&amp;y=2'>One &amp; &lt;first&gt;</a><a href='/second&apos;quoted'>Two</a>", body)
         self.assertIn(b'<article><h1>', body)
         self.assertNotIn(b'&lt;h1&gt;', body)
         self.assertNotIn(b'<aside>', body)
@@ -468,27 +467,22 @@ class HttpTests(unittest.TestCase):
         self.servers.append(server)
         self.assertIn(b'<nav>No navigation</nav>', server.request('/')[2])
 
-    def test_template_section_replay_preserves_parser_state(self):
+    def test_template_loops_and_conditionals(self):
         self.write_config()
         self.config.write_text(self.config.read_text().replace('Home=/\n', 'First=/first\nSecond=/second\nThird=/third\n'))
         server = Server(self.config, self.root)
         self.servers.append(server)
         cases = [
-            ('{{#navigation}}{{=<% %>=}}<%label%><%/navigation%>', 'FirstSecondThird'),
-            ('{{#navigation}}{{=<<END ]=}}<<ENDlabel]|<<END/navigation]after:<<ENDsite_title]', 'First|Second|Third|after:HTTP Test'),
-            ('{{#navigation}}{{=OPENOPEN CLOSEEND=}}OPENOPENlabelCLOSEEND|OPENOPEN/navigationCLOSEENDafter:OPENOPENsite_titleCLOSEEND', 'First|Second|Third|after:HTTP Test'),
-            ('{{=<% %>=}}<%#navigation%><%= {{ }} =%>{{label}}|{{/navigation}}after:{{site_title}}', 'First|Second|Third|after:HTTP Test'),
-            ('{{#navigation}}{{=<% %>=}}<%label%>[<%#navigation%><%= [[ ]] =%>[[label]],[[/navigation]]][[/navigation]]after:[[site_title]]', 'First[First,Second,Third,]Second[First,Second,Third,]Third[First,Second,Third,]after:HTTP Test'),
-            ('{{#navigation}}\n{{=<% %>=}}\n<%label%>\n<%/navigation%>\nafter:<%site_title%>\n', 'First\nSecond\nThird\nafter:HTTP Test\n'),
-            ('{{#navigation}}\n{{label}}{{/navigation}}\n', 'FirstSecondThird\n'),
-            ('{{#navigation}}\n{{=<% %>=}}\n<%label%><%/navigation%>\n', 'FirstSecondThird\n'),
-            ('prefix:{{#navigation}}\n{{label}}\n{{/navigation}}\n', 'prefix:\nFirst\n\nSecond\n\nThird\n'),
-            ('  {{#navigation}}[{{label}}]{{/navigation}}\n', '  [First][Second][Third]\n'),
-            ('  {{#navigation}}\n  {{label}}{{/navigation}}\n', '  First  Second  Third\n'),
-            ('prefix:{{#navigation}}{{label}}\n  {{/navigation}}\n', 'prefix:First\nSecond\nThird\n'),
-            ('{{#navigation}}\n{{label}}[{{#navigation}}\n{{label}}{{/navigation}}]{{/navigation}}\n', 'First[\nFirst\nSecond\nThird]Second[\nFirst\nSecond\nThird]Third[\nFirst\nSecond\nThird]\n'),
-            ('{{#navigation}}\r\n{{label}}{{/navigation}}\r\n', 'FirstSecondThird\r\n'),
-            ('{{#navigation}}\n{{label}}{{/navigation}}', 'FirstSecondThird'),
+            ('{% for link in navigation %}{{link.label}}{% endfor %}', 'FirstSecondThird'),
+            ('{% for link in navigation %}{{link.label}}|{% endfor %}after:{{site_title}}', 'First|Second|Third|after:HTTP Test'),
+            ('{% for outer in navigation %}{{outer.label}}[{% for inner in navigation %}{{inner.label}},{% endfor %}]{{outer.label}}{% endfor %}', 'First[First,Second,Third,]FirstSecond[First,Second,Third,]SecondThird[First,Second,Third,]Third'),
+            ('{% for link in navigation %}\n{{link.label}}{% endfor %}\n', '\nFirst\nSecond\nThird\n'),
+            ('prefix:{% for link in navigation %}\n{{link.label}}\n{% endfor %}\n', 'prefix:\nFirst\n\nSecond\n\nThird\n\n'),
+            ('  {% for link in navigation %}[{{link.label}}]{% endfor %}\n', '  [First][Second][Third]\n'),
+            ('{% for link in navigation %}\r\n{{link.label}}{% endfor %}\r\n', '\r\nFirst\r\nSecond\r\nThird\r\n'),
+            ('{% for link in navigation %}{{loop.index1}}:{{link.label}};{% endfor %}', '1:First;2:Second;3:Third;'),
+            ('{% if length(navigation) > 2 %}many{% else if navigation %}some{% else %}none{% endif %}', 'many'),
+            ('{% set count = length(navigation) %}{{count}}:{% for link in navigation %}{% if loop.is_first %}first:{% endif %}{{link.label}};{% endfor %}{{count}}', '3:first:First;Second;Third;3'),
         ]
         for template, expected in cases:
             with self.subTest(template=template):
@@ -505,12 +499,15 @@ class HttpTests(unittest.TestCase):
                     self.assertEqual(head_headers['content-length'], headers['content-length'])
                     self.assertEqual(head_body, b'')
                     self.assertEqual(server.raw('HEAD', path)[1], b'')
+        self.template.write_text('{% if error and length(navigation) >= 3 %}error{% else %}document{% endif %}')
+        self.assertEqual(server.request('/')[2], b'document')
+        self.assertEqual(server.request('/missing')[2], b'error')
 
     def test_template_edits_and_replacements_are_live(self):
-        self.template.write_text('<main>{{{content}}}</main>original layout{{#error}}original error{{/error}}')
+        self.template.write_text('<main>{{content()}}</main>original layout{% if error %}original error{% endif %}')
         server = self.start()
         self.assertIn(b'original layout', server.request('/')[2])
-        self.template.write_text('<section>{{{content}}}</section>updated layout{{#error}}updated error{{/error}}')
+        self.template.write_text('<section>{{content()}}</section>updated layout{% if error %}updated error{% endif %}')
         for path in ['/', '/missing', '/assets/missing']:
             status, headers, body = server.request(path)
             self.assertEqual(status, 200 if path == '/' else 404)
@@ -521,23 +518,23 @@ class HttpTests(unittest.TestCase):
             self.assertEqual(server.request(path, 'HEAD')[1]['content-length'], headers['content-length'])
             self.assertEqual(server.raw('HEAD', path)[1], b'')
         replacement = self.root / 'replacement.html'
-        replacement.write_text('<article>{{{content}}}</article>replacement layout')
+        replacement.write_text('<article>{{content()}}</article>replacement layout')
         replacement.replace(self.template)
         status, _, body = server.request('/')
         self.assertEqual(status, 200)
         self.assertIn(b'replacement layout', body)
         self.assertNotIn(b'updated layout', body)
         # Substituted site text and Markdown are not interpreted as templates.
-        (self.content / 'literal.md').write_text('# {{site_title}}\n\n{{#error}}literal{{/error}}\n')
+        (self.content / 'literal.md').write_text('# {{site_title}}\n\n{% if error %}literal{% endif %}\n')
         status, _, body = server.request('/literal')
         self.assertEqual(status, 200)
         self.assertIn(b'<h1>{{site_title}}</h1>', body)
-        self.assertIn(b'{{#error}}literal{{/error}}', body)
+        self.assertIn(b'{% if error %}literal{% endif %}', body)
 
     def test_template_failure_after_startup_and_recovery(self):
         server = self.start()
         original = self.template.read_bytes()
-        invalid = [b'prefix {{#error}}unclosed', b'prefix {{unknown}}', b'prefix\0hidden', b'x' * (1024 * 1024 + 1), b'']
+        invalid = [b'prefix {% if error %}unclosed', b'prefix {{unknown}}', b'prefix {% if title != "Page" %}{{unknown}}{% endif %}', b'prefix\0hidden', b'x' * (1024 * 1024 + 1), b'']
         for source in invalid + [None]:
             with self.subTest(source=source[:40] if source else source):
                 if source is None:
@@ -566,13 +563,13 @@ class HttpTests(unittest.TestCase):
         invalid = [
             (b'', 'nonempty'),
             (b'prefix\0hidden', 'NUL'),
-            (b'{{#navigation}}missing closing tag', 'invalid Mustache template'),
-            (b'{{^error}}{{#navigation}}{{/error}}{{/navigation}}', 'invalid Mustache template'),
-            (b'{{site_titel}}', 'unknown template name: site_titel'),
-            (b'{{#error}}{{typo}}{{/error}}', 'unknown template name: typo'),
-            (b'{{#navigation}}{{typo}}{{/navigation}}', 'unknown template name: typo'),
-            (b'{{^navigation}}{{typo}}{{/navigation}}', 'unknown template name: typo'),
-            (b'{{>missing}}', 'unknown template name: missing'),
+            (b'{% for link in navigation %}missing closing tag', 'invalid Inja template'),
+            (b'{% if error %}{% endfor %}', 'invalid Inja template'),
+            (b'{{site_titel}}', "variable 'site_titel' not found"),
+            (b'{% if error %}{{typo}}{% endif %}', "variable 'typo' not found"),
+            (b'{% for link in navigation %}{{link.typo}}{% endfor %}', "variable 'link.typo' not found"),
+            (b'{% if not navigation %}{{typo}}{% endif %}', "variable 'typo' not found"),
+            (b'{% include "missing.html" %}', "include 'missing.html' not found"),
             (b'x' * (1024 * 1024 + 1), 'exceeds 1 MiB'),
         ]
         for data, diagnostic in invalid:
@@ -600,7 +597,7 @@ class HttpTests(unittest.TestCase):
                     self.template.unlink()
 
     def test_template_expansion_obeys_output_limit(self):
-        self.template.write_text('<main>{{{content}}}{{{content}}}</main>{{#error}}<aside>{{message}}</aside>{{/error}}')
+        self.template.write_text('<main>{{content()}}{{content()}}</main>{% if error %}<aside>{{message}}</aside>{% endif %}')
         (self.content / 'repeated.md').write_text('x' * 700)
         server = self.start(output_limit=1024)
         status, headers, body = server.request('/repeated')

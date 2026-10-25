@@ -16,7 +16,7 @@ For a configuration diagnostic, inspect the named file, line, section, and setti
 
 Both roots must be existing directories, readable by the process account, and disjoint. Relative paths start at the configuration file's directory, not the process working directory. When moving an example config, update its relative roots. Configuration validation does not require every navigation target or configured resolution directory to exist.
 
-`[site] template` is required, including in existing configurations when upgrading. It must select a readable, nonempty regular file containing valid Mustache markup, limited to 1 MiB with no NUL bytes. The supplied layout is `templates/page.html` in a checkout or `share/stories/templates/page.html` in an installation. Template diagnostics name the selected file; see [Themes and page layout](themes.md) for supported names and sections.
+`[site] template` is required, including in existing configurations when upgrading. It must select a readable, nonempty regular file containing valid Inja markup, limited to 1 MiB with no NUL bytes. The supplied layout is `templates/page.html` in a checkout or `share/stories/templates/page.html` in an installation. Template diagnostics name the selected file; see [Themes and page layout](themes.md) for supported values, loops, and conditionals.
 
 If the listener fails, check that its numeric address is available and its port is free. Stories supports one HTTP endpoint, with bracketed IPv6 syntax when applicable. You can use `--listen 127.0.0.1:0` to request an ephemeral port; startup reports the selected port on stdout.
 

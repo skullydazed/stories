@@ -1,6 +1,6 @@
 # Stories
 
-Stories is a compact, file-backed documentation server written in C11. It renders Markdown on demand, gives documents extensionless URLs, supports ordered lookup of legacy names, and delegates public static assets to CivetWeb. Navigation and index pages are ordinary authored content.
+Stories is a compact, file-backed documentation server written in C11 with a small C++17 adapter for Inja templates. It renders Markdown on demand, gives documents extensionless URLs, supports ordered lookup of legacy names, and delegates public static assets to CivetWeb. Navigation and index pages are ordinary authored content.
 
 Stories serves HTTP behind a reverse proxy such as nginx for TLS and caching. FreeBSD is the primary deployment platform, macOS the development platform, and Linux the CI environment.
 
@@ -33,7 +33,7 @@ Open <http://127.0.0.1:8080/>. The configuration selects `docs/` and the separat
 
 ## Build
 
-Install a C11 compiler, CivetWeb 1.16 or newer, MD4C 0.4.8 or newer, their development headers, CMake 3.20 or newer, Make or Ninja, and Python 3.8 or newer. pkgconf is optional. Normal builds use installed libraries and do not download sources.
+Install C11 and C++17 compilers, CivetWeb 1.16 or newer, MD4C 0.4.8 or newer, their development headers, CMake 3.20 or newer, Make or Ninja, and Python 3.8 or newer. pkgconf is optional. CivetWeb and MD4C use installed libraries. From a Git checkout, CMake automatically initializes the unmodified Inja submodule at the revision recorded by Stories; the initial configuration requires Git and network access. Inja includes its nlohmann/json headers. No recursive clone or separate submodule command is needed.
 
 On macOS:
 
@@ -49,7 +49,7 @@ cmake --build build
 ctest --test-dir build
 ```
 
-Compiler selection prefers `clang`, then `gcc`, then `cc`, while respecting explicit compiler choices and toolchain files. See [Development](docs/development.md) for static analysis, sanitizers, fuzzing, and CI.
+Compiler selection prefers `clang`, then `gcc`, then `cc`. C++ defaults to the selected C driver's companion when available, then searches for `clang++`, `g++`, and `c++` in that order. Explicit compiler choices and toolchain files take precedence. See [Development](docs/development.md) for static analysis, sanitizers, fuzzing, and CI.
 
 ## Run your own site
 
@@ -68,4 +68,4 @@ Follow [CODESTYLE.md](CODESTYLE.md) and the [design contracts](docs/design.md). 
 
 Stories is MIT licensed; see [LICENSE.md](LICENSE.md). The bundled Pico CSS stylesheet includes its [MIT license](assets/LICENSE.pico.md).
 
-The bundled Mustach template core includes its [BSD Zero Clause license](third_party/mustach/LICENSE.txt).
+Inja and its bundled nlohmann/json dependency are MIT licensed; their licenses ship with installed binaries. Both remain unmodified upstream source. See [Inja](https://github.com/pantor/inja) and [nlohmann/json](https://github.com/nlohmann/json).

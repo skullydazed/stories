@@ -13,20 +13,19 @@
 				<li><a href="/"><strong>{{site_title}}</strong></a></li>
 			</ul>
 			<ul>
-				{{#navigation}}
-				<li><a href="{{url}}">{{label}}</a></li>
-				{{/navigation}}
+				{% for link in navigation %}
+				<li><a href="{{link.url}}">{{link.label}}</a></li>
+				{% endfor %}
 			</ul>
 		</nav>
 	</header>
 	<main class="container">
-		{{#error}}
+		{% if error %}
 		<h1>{{title}}</h1>
 		<p>{{message}}</p>
-		{{/error}}
-		{{^error}}
-{{{content}}}
-		{{/error}}
+		{% else %}
+{{content()}}
+		{% endif %}
 	</main>
 </body>
 </html>

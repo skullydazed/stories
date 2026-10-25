@@ -33,10 +33,12 @@ void document_route_free(struct document_route *route)
 Format changed C files with `clang-format -i`. To check the project's C formatting:
 
 ```sh
-clang-format --dry-run --Werror src/*.c src/*.h tests/test_subsystems.c fuzz/*.c
+clang-format --dry-run --Werror src/*.c src/*.cpp src/*.h tests/test_subsystems.c fuzz/*.c
 ```
 
 Keep third-party assets and generated files out of routine formatting changes.
+
+The page template adapter uses C++17 for Inja. Keep that boundary small and procedural, use the same brace and indentation conventions, and catch all C++ exceptions before returning to C. Library-owned template and JSON objects remain local to an expansion; rendered Markdown is borrowed through the output callback rather than copied into JSON. Third-party source stays unmodified.
 
 ## Subsystems, names, and interfaces
 

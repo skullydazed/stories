@@ -10,22 +10,21 @@ template = templates/page.html
 
 The path resolves relative to the configuration file, independently of the working directory. Keep templates outside the public asset and Markdown roots. There is no compiled-in layout or source-tree fallback. Existing configurations need a `template` setting when upgrading to this version.
 
-Stories checks the template before starting its listener, then reads it again for each document or error render. Edits appear on the next uncached request, without restarting or rebuilding the server. Template bytes are request-owned and released after expansion; there is no application template cache. `--check-config` checks the template as well as configuration and roots. Missing files, nonregular files, empty templates, NUL bytes, malformed Mustache syntax, and unknown names fail validation. Template files are limited to 1 MiB. Publish complete templates by atomic replacement to avoid readers seeing a partial edit.
+Stories checks the template before starting its listener, then reads and parses it again for each document or error render. Edits appear on the next uncached request, without restarting or rebuilding the server. Template bytes and parsed state are request-owned and released after expansion; there is no application template cache. `--check-config` checks the template as well as configuration and roots. Missing files, nonregular files, empty templates, NUL bytes, and malformed Inja syntax fail validation. Startup also renders representative document/error paths with and without navigation; unknown names fail when evaluated, including in branches selected later by a request. Template files are limited to 1 MiB. Publish complete templates by atomic replacement to avoid readers seeing a partial edit.
 
 ## Template values
 
-Templates use Mustache syntax, interpreted by the bundled [Mustach core](https://gitlab.com/jobol/mustach). Ordinary `{{name}}` substitutions are HTML-escaped, including both quote characters. Use these substitutions in HTML text or quoted HTML attributes, rather than JavaScript, CSS, or URL-building expressions.
+Templates use [Inja](https://github.com/pantor/inja), with Jinja-style loops, conditionals, comparisons, logical expressions, local variables, and comments. Ordinary `{{name}}` string substitutions are HTML-escaped, including both quote characters. Use these substitutions in HTML text or quoted HTML attributes, rather than JavaScript, CSS, or URL-building expressions.
 
-| Value or section | Meaning |
+| Value or expression | Meaning |
 | --- | --- |
 | `{{title}}` | The first Markdown heading's plain text, with a filename fallback; the HTTP error title on error pages. |
 | `{{site_title}}` | The configured site title. |
-| `{{{content}}}` | Rendered Markdown HTML, inserted without escaping. Empty on error pages. |
-| `{{#navigation}}…{{/navigation}}` | Repeat the enclosed markup for each configured navigation entry, in order. |
-| `{{label}}`, `{{url}}` | The current navigation entry's label and destination, available inside the navigation section. |
-| `{{^navigation}}…{{/navigation}}` | Render when there are no configured navigation entries. |
-| `{{#error}}…{{/error}}` | Render on error pages. |
-| `{{^error}}…{{/error}}` | Render on document pages. |
+| `{{content()}}` | Write rendered Markdown HTML without escaping. Empty on error pages. This function writes directly to the response rather than returning a string. |
+| `{% for link in navigation %}…{% endfor %}` | Repeat the enclosed markup for each configured navigation entry, in order. |
+| `{{link.label}}`, `{{link.url}}` | The current navigation entry's label and destination. |
+| `{% if navigation %}…{% else %}…{% endif %}` | Select markup based on whether navigation is nonempty. |
+| `{% if error %}…{% else %}…{% endif %}` | Select error or document markup. `error` is a boolean. |
 | `{{message}}` | The error explanation; empty on document pages. |
 
 For example:
@@ -44,27 +43,28 @@ For example:
 	<header class="container">
 		<a href="/">{{site_title}}</a>
 		<nav>
-			{{#navigation}}
-			<a href="{{url}}">{{label}}</a>
-			{{/navigation}}
+			{% for link in navigation %}
+			<a href="{{link.url}}">{{link.label}}</a>
+			{% endfor %}
 		</nav>
 	</header>
 	<main class="container">
-		{{#error}}
+		{% if error %}
 		<h1>{{title}}</h1>
 		<p>{{message}}</p>
-		{{/error}}
-		{{^error}}
-{{{content}}}
-		{{/error}}
+		{% else %}
+{{content()}}
+		{% endif %}
 	</main>
 </body>
 </html>
 ```
 
-The template supplies navigation and error markup as well as the page shell. No application-generated header or footer is added around it. Mustache comments and delimiter changes are supported by the core; partial files, arbitrary variables, and additional data sections are not exposed.
+The template supplies navigation and error markup as well as the page shell. No application-generated header or footer is added around it. Expressions such as `{% if length(navigation) > 1 and not error %}` work directly in the template. Inja also supports `{% set count = length(navigation) %}`, `loop.index1`, and `{# comments #}`. These local assignments do not change Stories' configuration. Filesystem includes are not loaded automatically.
 
-Template authors are trusted, just like Markdown authors. Triple braces deliberately insert raw content; reserve them for the rendered `content` value. Substituted values and rendered Markdown are not reparsed as templates, so literal Mustache syntax in a document stays literal.
+Use `{{content()}}` only where the rendered body should be written. Calling it in a condition or assignment still writes the body; it does not provide a string for filtering or comparison. Substituted values and rendered Markdown are not reparsed as templates, so literal Inja syntax in a document stays literal. Previous Mustache layouts need conversion to this syntax; triple braces and Mustache section tags are not supported.
+
+Template authors are trusted, just like Markdown authors. Inja allocates syntax trees, JSON metadata, and expression results internally; the response budget does not cap all of those allocations. Avoid unnecessarily large temporary values such as `range()` arrays. Its arithmetic does not guard every error: avoid signed integer overflow and remainder by zero. These upstream limitations are accepted for trusted templates; Stories carries no dependency patches. See [Design contracts](design.md) for the memory lifecycle.
 
 The configured `output_limit` applies to the complete expanded document, including repeated content and navigation. An expansion failure discards the incomplete document and returns an independent error response. Error pages use the same template with a separate 256 KiB budget; if that also fails, Stories sends a short fallback message.
 
