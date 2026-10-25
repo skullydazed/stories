@@ -33,7 +33,7 @@ ctest --test-dir build
 
 Compiler selection prefers `clang`, then `gcc`, then `cc`. Explicit compiler settings and toolchain files take precedence. Tests are enabled by default.
 
-Copy [stories.conf.example](stories.conf.example) to `stories.conf`, create separate Markdown and asset roots, and adjust paths and navigation links. The local `stories.conf` is ignored by Git. Relative filesystem paths resolve against the selected configuration file's directory, independently of the process working directory.
+Copy [examples/stories.conf.example](examples/stories.conf.example) to `stories.conf`, create separate Markdown and asset roots, and adjust paths and navigation links. The local `stories.conf` is ignored by Git. Relative filesystem paths resolve against the selected configuration file's directory, independently of the process working directory.
 
 ```sh
 ./build/stories --config /path/to/stories.conf --check-config
