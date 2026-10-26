@@ -20,7 +20,8 @@ struct template_output : std::streambuf
 {
 	struct buffer *destination;
 
-	explicit template_output(struct buffer *output) : destination(output)
+	explicit template_output(struct buffer *output)
+	    : destination(output)
 	{
 	}
 

@@ -71,7 +71,7 @@ def main():
         source.mkdir(exist_ok=True)
         run('tar', '-xzf', str(archive), '-C', str(source), '--strip-components=1')
         build = sources / (name + '-' + commit + '-build')
-        run('cmake', '-S', str(source), '-B', str(build), '-G', 'Ninja', '-DCMAKE_BUILD_TYPE=Release', '-DCMAKE_POLICY_VERSION_MINIMUM=3.5', '-DBUILD_SHARED_LIBS=OFF', '-DCMAKE_INSTALL_LIBDIR=lib', '-DCMAKE_INSTALL_PREFIX=' + str(prefix), *options)
+        run('cmake', '-S', str(source), '-B', str(build), '-G', 'Ninja', '-DCMAKE_BUILD_TYPE=Release', '-DCMAKE_POLICY_VERSION_MINIMUM=3.5', '-DCMAKE_POSITION_INDEPENDENT_CODE=ON', '-DBUILD_SHARED_LIBS=OFF', '-DCMAKE_INSTALL_LIBDIR=lib', '-DCMAKE_INSTALL_PREFIX=' + str(prefix), *options)
         run('cmake', '--build', str(build), '--parallel', '2')
         run('cmake', '--install', str(build))
         shutil.copyfile(source / 'LICENSE.md', licenses / (name + '.md'))

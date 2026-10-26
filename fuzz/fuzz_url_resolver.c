@@ -9,6 +9,9 @@
 #include <string.h>
 #include <unistd.h>
 
+int LLVMFuzzerInitialize(int *argc, char ***argv);
+int LLVMFuzzerTestOneInput(const uint8_t *data, size_t size);
+
 /* The only mutable global is harness-owned setup, never production state.
  * Open the immutable fixture tree once, not once per generated input. */
 static int root_fd = -1;
@@ -25,10 +28,14 @@ int LLVMFuzzerInitialize(int *argc, char ***argv)
 
 int LLVMFuzzerTestOneInput(const uint8_t *data, size_t size)
 {
+	/* The configuration owns mutable strings; the resolver only reads them. */
+	static char          disambiguation[] = "disambiguation";
+	static char          command[] = "command";
+	static char          function[] = "function";
 	struct configuration configuration = {.directory_count = 3};
-	configuration.directories[0] = "disambiguation";
-	configuration.directories[1] = "command";
-	configuration.directories[2] = "function";
+	configuration.directories[0] = disambiguation;
+	configuration.directories[1] = command;
+	configuration.directories[2] = function;
 	struct document_route route;
 	document_resolve(root_fd, &configuration, (const char *)data, size, &route);
 	if (route.status == ROUTE_DOCUMENT || route.status == ROUTE_REDIRECT)
