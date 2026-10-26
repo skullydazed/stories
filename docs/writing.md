@@ -49,7 +49,7 @@ Raw HTML passes through as trusted content, including scripts and other active c
 
 ## Publish assets
 
-The supplied layout requests `/assets/pico.min.css`, `/assets/dark_toggle.css`, `/assets/theme.css`, `/assets/site.css`, and `/assets/theme.js`. Copy those bundled files into the configured asset root, or use the installed `share/stories/assets` directory as that root. There is no stylesheet search outside the configured directory.
+The supplied layout requests `/assets/pico.min.css`, `/assets/dark_toggle.css`, `/assets/theme.css`, `/assets/site.css`, and `/assets/dark_toggle.js`. Copy those bundled files into the configured asset root, or use the installed `share/stories/assets` directory as that root. There is no stylesheet search outside the configured directory.
 
 Asset URLs retain extensions. A file `images/logo.png` beneath the asset root is served as `/assets/images/logo.png`. Image destinations are not rewritten, so use an explicit asset URL:
 

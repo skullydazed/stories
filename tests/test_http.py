@@ -97,7 +97,7 @@ class HttpTests(unittest.TestCase):
         shutil.copytree(FIXTURES, self.content)
         self.assets.mkdir()
         shutil.copyfile(FIXTURES.parent.parent / 'assets' / 'pico.min.css', self.assets / 'pico.min.css')
-        for name in ['dark_toggle.css', 'theme.css', 'site.css', 'theme.js']:
+        for name in ['dark_toggle.css', 'theme.css', 'site.css', 'dark_toggle.js']:
             shutil.copyfile(FIXTURES.parent.parent / 'assets' / name, self.assets / name)
         (self.assets / 'sample.txt').write_text('asset bytes\n')
         (self.content / 'private.txt').write_text('must not leak')
@@ -230,13 +230,13 @@ class HttpTests(unittest.TestCase):
             stylesheets = ['pico.min.css', 'dark_toggle.css', 'theme.css', 'site.css']
             positions = [body.index(f'href="/assets/{name}"'.encode()) for name in stylesheets]
             self.assertEqual(positions, sorted(positions))
-            self.assertIn(b'src="/assets/theme.js"', body)
+            self.assertIn(b'src="/assets/dark_toggle.js"', body)
             self.assertIn(b'<button id="theme-switcher" type="button"', body)
             self.assertIn(b'role="switch"', body)
             self.assertIn('☀️'.encode(), body)
             self.assertIn('🌑'.encode(), body)
             self.assertIn(b'href="/assets/theme.css"', body)
-        self.assertEqual(server.request('/assets/theme.js')[0], 200)
+        self.assertEqual(server.request('/assets/dark_toggle.js')[0], 200)
         self.assertEqual(server.request('/assets/dark_toggle.css')[0], 200)
         self.assertEqual(server.request('/assets/theme.css')[0], 200)
         stylesheet = self.assets / 'site.css'

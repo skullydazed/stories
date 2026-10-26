@@ -86,7 +86,7 @@ The supplied template loads styles in this order: `/assets/pico.min.css`, `/asse
 }
 ```
 
-The supplied template also loads `/assets/theme.js` and provides a switch with ☀️ and 🌑 icons, styled by `/assets/dark_toggle.css`. It starts in System mode, following the visitor's operating system preference, including later changes. The first click selects the opposite of the current system preference; subsequent clicks toggle only between Light and Dark. These explicit modes set `data-theme` on the page's `<html>` element and override that preference. The choice is remembered in browser local storage when available; switching still works for the current page if storage is blocked. Without JavaScript, the control stays hidden and CSS follows the system preference. See [Pico's color schemes](https://picocss.com/docs/color-schemes).
+The supplied template also loads `/assets/dark_toggle.js` and provides a switch with ☀️ and 🌑 icons, styled by `/assets/dark_toggle.css`. It starts in System mode, following the visitor's operating system preference, including later changes. The first click selects the opposite of the current system preference; subsequent clicks toggle only between Light and Dark. These explicit modes set `data-theme` on the page's `<html>` element and override that preference. The choice is remembered in browser local storage when available; switching still works for the current page if storage is blocked. Without JavaScript, the control stays hidden and CSS follows the system preference. See [Pico's color schemes](https://picocss.com/docs/color-schemes).
 
 Stories bundles five self-contained CSS themes. Each includes both variants and works with the same control:
 
@@ -106,7 +106,7 @@ To activate a theme in the source checkout with the example asset root:
 cp themes/solarized.css assets/theme.css
 ```
 
-For an installed release, copy the chosen file from `share/stories/themes/` into your configured asset root as `theme.css`. Retain `pico.min.css`, `dark_toggle.css`, `site.css`, and `theme.js` in the asset root. No configuration edit or restart is needed. Replacing `theme.css` with an empty file or a CSS comment restores Pico's default palette while retaining `site.css` customizations. A custom page template must include these stylesheet links and the switcher markup/script to provide the same behavior.
+For an installed release, copy the chosen file from `share/stories/themes/` into your configured asset root as `theme.css`. Retain `pico.min.css`, `dark_toggle.css`, `site.css`, and `dark_toggle.js` in the asset root. No configuration edit or restart is needed. Replacing `theme.css` with an empty file or a CSS comment restores Pico's default palette while retaining `site.css` customizations. A custom page template must include these stylesheet links and the switcher markup/script to provide the same behavior.
 
 CSS and template edits appear on the next uncached request. Changing configuration values, including the selected template path, requires a restart. A reverse proxy or browser cache can delay visible changes; verify against the backend when diagnosing stale styling.
 

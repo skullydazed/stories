@@ -72,7 +72,7 @@ def main():
             raise SystemExit('installed stylesheet differs from the bundled asset')
         if (extracted / 'share/stories/templates/page.html').read_bytes() != (root / 'templates/page.html').read_bytes():
             raise SystemExit('installed page template differs from the source template')
-        for relative in ['assets/dark_toggle.css', 'assets/theme.css', 'assets/site.css', 'assets/theme.js', 'themes/README.md', 'themes/solarized.css', 'themes/dracula.css', 'themes/tomorrow.css', 'themes/catppuccin.css', 'themes/80s-terminal.css']:
+        for relative in ['assets/dark_toggle.css', 'assets/theme.css', 'assets/site.css', 'assets/dark_toggle.js', 'themes/README.md', 'themes/solarized.css', 'themes/dracula.css', 'themes/tomorrow.css', 'themes/catppuccin.css', 'themes/80s-terminal.css']:
             if (extracted / 'share/stories' / relative).read_bytes() != (root / relative).read_bytes():
                 raise SystemExit('installed presentation file differs from the source: ' + relative)
         for relative in ['share/licenses/stories/inja/LICENSE', 'share/licenses/stories/inja/UPSTREAM.txt', 'share/licenses/stories/nlohmann-json/LICENSE.MIT']:

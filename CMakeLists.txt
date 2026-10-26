@@ -118,7 +118,7 @@ add_executable(stories src/main.c src/server.c)
 target_link_libraries(stories PRIVATE stories-core CivetWeb::CivetWeb Threads::Threads)
 
 install(TARGETS stories RUNTIME DESTINATION "${CMAKE_INSTALL_BINDIR}")
-install(FILES assets/pico.min.css assets/LICENSE.pico.md assets/dark_toggle.css assets/theme.css assets/site.css assets/theme.js DESTINATION "${CMAKE_INSTALL_DATADIR}/stories/assets")
+install(FILES assets/pico.min.css assets/LICENSE.pico.md assets/dark_toggle.css assets/theme.css assets/site.css assets/dark_toggle.js DESTINATION "${CMAKE_INSTALL_DATADIR}/stories/assets")
 install(DIRECTORY themes/ DESTINATION "${CMAKE_INSTALL_DATADIR}/stories/themes" FILES_MATCHING PATTERN "*.css" PATTERN "*.md")
 install(FILES templates/page.html DESTINATION "${CMAKE_INSTALL_DATADIR}/stories/templates")
 install(FILES inja/LICENSE DESTINATION "${CMAKE_INSTALL_DATADIR}/licenses/stories/inja")

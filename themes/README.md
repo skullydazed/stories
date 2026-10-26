@@ -8,7 +8,7 @@ From the source checkout, with the example asset root:
 cp themes/solarized.css assets/theme.css
 ```
 
-An installation or release archive includes these files under `share/stories/themes/`. Copy the selected file into your own asset root as `theme.css`. Keep `pico.min.css`, `dark_toggle.css`, `site.css`, and `theme.js` in that root too. An uncached reload applies the new theme without restarting Stories.
+An installation or release archive includes these files under `share/stories/themes/`. Copy the selected file into your own asset root as `theme.css`. Keep `pico.min.css`, `dark_toggle.css`, `site.css`, and `dark_toggle.js` in that root too. An uncached reload applies the new theme without restarting Stories.
 
 | File | Light | Dark | Palette source |
 | --- | --- | --- | --- |

@@ -55,7 +55,7 @@ For an extracted release, run these commands from the extracted directory:
 ./bin/stories --config share/stories/examples/docs.conf.example
 ```
 
-The default endpoint is `127.0.0.1:8080`. For a separate deployment layout, copy the `docs/` tree to your chosen content root, provide an asset root containing `pico.min.css`, `dark_toggle.css`, `theme.css`, `site.css`, and `theme.js`, and copy `templates/page.html` outside those public roots. Set both roots and `[site] template` explicitly in your configuration. Moving a configuration outside the supplied tree requires adjusting its relative paths or using absolute paths. Existing configurations need the required `template` setting when upgrading.
+The default endpoint is `127.0.0.1:8080`. For a separate deployment layout, copy the `docs/` tree to your chosen content root, provide an asset root containing `pico.min.css`, `dark_toggle.css`, `theme.css`, `site.css`, and `dark_toggle.js`, and copy `templates/page.html` outside those public roots. Set both roots and `[site] template` explicitly in your configuration. Moving a configuration outside the supplied tree requires adjusting its relative paths or using absolute paths. Existing configurations need the required `template` setting when upgrading.
 
 ## Configure nginx
 
