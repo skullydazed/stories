@@ -101,6 +101,8 @@ Stories bundles six self-contained CSS themes. Each includes both variants and w
 
 The community themes use their upstream palettes; the terminal theme is an original design with monospace text. Its Light variant intentionally has a blue background. The EPIC theme follows the [existing site's](https://epicsol.org/) Arial typography and paper layout in Light mode, with an original Dark palette using orange `#f38d2d`, lavender `#8a90ba`, and navy shades sampled from its [anniversary logo](https://epicsol.org/lib/tpl/dokuwiki/images/logo.png). It does not load remote images or stylesheets. Palette sources and licenses are included in the [bundled theme directory](https://github.com/skullydazed/stories/tree/main/themes).
 
+The bundled themes map text and controls to readable colors from those palettes. Some text roles differ from editor defaults: Solarized uses stronger base tones, and Catppuccin Latte uses mauve primary controls. Low-contrast insertion/deletion accents use normal text color with the existing underline/strikethrough. Selected text and checkbox icons have explicit contrasting foregrounds. Typography and corner defaults in the terminal and EPIC themes remain overridable using the `:root` example above.
+
 To activate a theme in the source checkout with the example asset root:
 
 ```sh

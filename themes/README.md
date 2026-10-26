@@ -23,4 +23,6 @@ The ☀️/🌑 switch starts in System mode, following the visitor's operating 
 
 The EPIC theme also follows the site's Arial typography and bordered paper layout. Its dark variant is an original interpretation using the logo's orange `#f38d2d`, lavender `#8a90ba`, and navy shades; the existing EPIC site supplies the light reference. The CSS is self-contained and does not load the logo or any remote assets.
 
+Text roles use higher-contrast choices from each upstream palette rather than new shades. This includes stronger base tones for Solarized text, mauve primary controls in Catppuccin Latte, and brighter muted/code text in Dracula Dark. Low-contrast insertion or deletion accents use the normal text color while retaining their underline or strikethrough. Checkbox icons and selected text have explicit foregrounds for each mode. Font, spacing, and corner defaults in the terminal and EPIC themes can be overridden with a later `:root` rule in `site.css`.
+
 To return to Pico's default colors, replace `theme.css` with an empty file or a CSS comment. Your `site.css` customizations remain in effect. To customize a bundled theme, edit the palette variables in the copied file; each mode has its own palette, and the dark palette appears in both the system-preference rule and the explicit Dark rule.

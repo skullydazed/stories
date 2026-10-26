@@ -73,8 +73,8 @@ SOFTWARE.
 	--pico-h6-color: var(--stories-heading);
 	--pico-mark-background-color: var(--stories-mark);
 	--pico-mark-color: var(--stories-mark-text);
-	--pico-ins-color: var(--stories-green);
-	--pico-del-color: var(--stories-red);
+	--pico-ins-color: var(--stories-ins);
+	--pico-del-color: var(--stories-del);
 	--pico-table-row-stripped-background-color: var(--stories-surface);
 	--pico-code-background-color: var(--stories-surface);
 	--pico-code-color: var(--stories-code);
@@ -112,19 +112,24 @@ SOFTWARE.
 	--stories-background: #eff1f5;
 	--stories-foreground: #4c4f69;
 	--stories-heading: #4c4f69;
-	--stories-muted: #6c6f85;
+	--stories-muted: #5c5f77;
 	--stories-surface: #e6e9ef;
 	--stories-border: #ccd0da;
 	--stories-selection: #ccd0da;
-	--stories-primary: #1e66f5;
+	--stories-primary: #8839ef;
 	--stories-hover: #8839ef;
-	--stories-secondary: #179299;
-	--stories-code: #8839ef;
+	--stories-secondary: #4c4f69;
+	--stories-code: #4c4f69;
 	--stories-red: #d20f39;
 	--stories-green: #40a02b;
-	--stories-mark: #df8e1d;
-	--stories-mark-text: #4c4f69;
+	--stories-mark: #8839ef;
+	--stories-mark-text: #eff1f5;
 	--stories-inverse: #eff1f5;
+	--stories-selection-text: var(--stories-foreground);
+	--stories-ins: var(--stories-foreground);
+	--stories-del: var(--stories-red);
+	--pico-icon-checkbox: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='24' height='24' viewBox='0 0 24 24' fill='none' stroke='%23eff1f5' stroke-width='4' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpolyline points='20 6 9 17 4 12'%3E%3C/polyline%3E%3C/svg%3E");
+	--pico-icon-minus: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='24' height='24' viewBox='0 0 24 24' fill='none' stroke='%23eff1f5' stroke-width='4' stroke-linecap='round' stroke-linejoin='round'%3E%3Cline x1='5' y1='12' x2='19' y2='12'%3E%3C/line%3E%3C/svg%3E");
 }
 
 @media (prefers-color-scheme: dark)
@@ -148,6 +153,11 @@ SOFTWARE.
 		--stories-mark: #f9e2af;
 		--stories-mark-text: var(--stories-inverse);
 		--stories-inverse: #1e1e2e;
+		--stories-selection-text: var(--stories-foreground);
+		--stories-ins: var(--stories-green);
+		--stories-del: var(--stories-red);
+		--pico-icon-checkbox: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='24' height='24' viewBox='0 0 24 24' fill='none' stroke='%231e1e2e' stroke-width='4' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpolyline points='20 6 9 17 4 12'%3E%3C/polyline%3E%3C/svg%3E");
+		--pico-icon-minus: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='24' height='24' viewBox='0 0 24 24' fill='none' stroke='%231e1e2e' stroke-width='4' stroke-linecap='round' stroke-linejoin='round'%3E%3Cline x1='5' y1='12' x2='19' y2='12'%3E%3C/line%3E%3C/svg%3E");
 	}
 }
 
@@ -170,4 +180,15 @@ SOFTWARE.
 	--stories-mark: #f9e2af;
 	--stories-mark-text: var(--stories-inverse);
 	--stories-inverse: #1e1e2e;
+	--stories-selection-text: var(--stories-foreground);
+	--stories-ins: var(--stories-green);
+	--stories-del: var(--stories-red);
+	--pico-icon-checkbox: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='24' height='24' viewBox='0 0 24 24' fill='none' stroke='%231e1e2e' stroke-width='4' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpolyline points='20 6 9 17 4 12'%3E%3C/polyline%3E%3C/svg%3E");
+	--pico-icon-minus: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='24' height='24' viewBox='0 0 24 24' fill='none' stroke='%231e1e2e' stroke-width='4' stroke-linecap='round' stroke-linejoin='round'%3E%3Cline x1='5' y1='12' x2='19' y2='12'%3E%3C/line%3E%3C/svg%3E");
+}
+
+/* Selected text and code share a readable, visible highlight. */
+::selection
+{
+	color: var(--stories-selection-text);
 }

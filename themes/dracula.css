@@ -73,8 +73,8 @@ SOFTWARE.
 	--pico-h6-color: var(--stories-heading);
 	--pico-mark-background-color: var(--stories-mark);
 	--pico-mark-color: var(--stories-mark-text);
-	--pico-ins-color: var(--stories-green);
-	--pico-del-color: var(--stories-red);
+	--pico-ins-color: var(--stories-ins);
+	--pico-del-color: var(--stories-del);
 	--pico-table-row-stripped-background-color: var(--stories-surface);
 	--pico-code-background-color: var(--stories-surface);
 	--pico-code-color: var(--stories-code);
@@ -125,6 +125,11 @@ SOFTWARE.
 	--stories-mark: #846e15;
 	--stories-mark-text: #fffbeb;
 	--stories-inverse: #fffbeb;
+	--stories-selection-text: var(--stories-foreground);
+	--stories-ins: var(--stories-green);
+	--stories-del: var(--stories-red);
+	--pico-icon-checkbox: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='24' height='24' viewBox='0 0 24 24' fill='none' stroke='%23fffbeb' stroke-width='4' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpolyline points='20 6 9 17 4 12'%3E%3C/polyline%3E%3C/svg%3E");
+	--pico-icon-minus: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='24' height='24' viewBox='0 0 24 24' fill='none' stroke='%23fffbeb' stroke-width='4' stroke-linecap='round' stroke-linejoin='round'%3E%3Cline x1='5' y1='12' x2='19' y2='12'%3E%3C/line%3E%3C/svg%3E");
 }
 
 @media (prefers-color-scheme: dark)
@@ -135,19 +140,24 @@ SOFTWARE.
 		--stories-background: #282a36;
 		--stories-foreground: #f8f8f2;
 		--stories-heading: #f8f8f2;
-		--stories-muted: #6272a4;
+		--stories-muted: #ffb86c;
 		--stories-surface: #44475a;
 		--stories-border: #6272a4;
-		--stories-selection: #44475a;
+		--stories-selection: #bd93f9;
 		--stories-primary: #bd93f9;
 		--stories-hover: #ff79c6;
 		--stories-secondary: #8be9fd;
-		--stories-code: #ff79c6;
+		--stories-code: #8be9fd;
 		--stories-red: #ff5555;
 		--stories-green: #50fa7b;
 		--stories-mark: #f1fa8c;
 		--stories-mark-text: var(--stories-inverse);
 		--stories-inverse: #282a36;
+		--stories-selection-text: var(--stories-inverse);
+		--stories-ins: var(--stories-green);
+		--stories-del: var(--stories-red);
+		--pico-icon-checkbox: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='24' height='24' viewBox='0 0 24 24' fill='none' stroke='%23282a36' stroke-width='4' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpolyline points='20 6 9 17 4 12'%3E%3C/polyline%3E%3C/svg%3E");
+		--pico-icon-minus: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='24' height='24' viewBox='0 0 24 24' fill='none' stroke='%23282a36' stroke-width='4' stroke-linecap='round' stroke-linejoin='round'%3E%3Cline x1='5' y1='12' x2='19' y2='12'%3E%3C/line%3E%3C/svg%3E");
 	}
 }
 
@@ -157,17 +167,28 @@ SOFTWARE.
 	--stories-background: #282a36;
 	--stories-foreground: #f8f8f2;
 	--stories-heading: #f8f8f2;
-	--stories-muted: #6272a4;
+	--stories-muted: #ffb86c;
 	--stories-surface: #44475a;
 	--stories-border: #6272a4;
-	--stories-selection: #44475a;
+	--stories-selection: #bd93f9;
 	--stories-primary: #bd93f9;
 	--stories-hover: #ff79c6;
 	--stories-secondary: #8be9fd;
-	--stories-code: #ff79c6;
+	--stories-code: #8be9fd;
 	--stories-red: #ff5555;
 	--stories-green: #50fa7b;
 	--stories-mark: #f1fa8c;
 	--stories-mark-text: var(--stories-inverse);
 	--stories-inverse: #282a36;
+	--stories-selection-text: var(--stories-inverse);
+	--stories-ins: var(--stories-green);
+	--stories-del: var(--stories-red);
+	--pico-icon-checkbox: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='24' height='24' viewBox='0 0 24 24' fill='none' stroke='%23282a36' stroke-width='4' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpolyline points='20 6 9 17 4 12'%3E%3C/polyline%3E%3C/svg%3E");
+	--pico-icon-minus: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='24' height='24' viewBox='0 0 24 24' fill='none' stroke='%23282a36' stroke-width='4' stroke-linecap='round' stroke-linejoin='round'%3E%3Cline x1='5' y1='12' x2='19' y2='12'%3E%3C/line%3E%3C/svg%3E");
+}
+
+/* Selected text and code share a readable, visible highlight. */
+::selection
+{
+	color: var(--stories-selection-text);
 }
