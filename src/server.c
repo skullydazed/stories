@@ -267,8 +267,9 @@ int server_run(const struct configuration *configuration)
 	/* Block before creating workers so all of them inherit the signal mask.
 	 * Only the main thread consumes termination signals and performs shutdown. */
 	sigemptyset(&signals);
-	sigaddset(&signals, SIGINT);
-	sigaddset(&signals, SIGTERM);
+	/* Darwin's sigaddset macro triggers GCC's sign-conversion warning; use the POSIX function. */
+	(sigaddset)(&signals, SIGINT);
+	(sigaddset)(&signals, SIGTERM);
 	if (pthread_sigmask(SIG_BLOCK, &signals, &old_signals))
 		goto done;
 	signals_blocked = true;

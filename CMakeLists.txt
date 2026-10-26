@@ -153,8 +153,9 @@ if(STORIES_HARDENING AND NOT STORIES_SANITIZERS AND NOT STORIES_THREAD_SANITIZER
 	# Fortification needs optimization; glibc warns at -O0. Unset first so a distribution default of another level cannot conflict.
 	target_compile_options(stories-hardening INTERFACE "$<$<NOT:$<CONFIG:Debug>>:-U_FORTIFY_SOURCE>" "$<$<NOT:$<CONFIG:Debug>>:-D_FORTIFY_SOURCE=2>")
 	include(CheckPIESupported)
-	check_pie_supported(LANGUAGES C)
-	if(CMAKE_C_LINK_PIE_SUPPORTED)
+	check_pie_supported(LANGUAGES C CXX)
+	# stories-core supplies C++ sources, so the server links with the C++ driver.
+	if(CMAKE_CXX_LINK_PIE_SUPPORTED)
 		set(stories_pie ON)
 	endif()
 endif()
