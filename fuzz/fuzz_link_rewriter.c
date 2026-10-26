@@ -5,6 +5,8 @@
 #include <stdint.h>
 #include <string.h>
 
+int LLVMFuzzerTestOneInput(const uint8_t *data, size_t size);
+
 int LLVMFuzzerTestOneInput(const uint8_t *data, size_t size)
 {
 	static const char *sources[] = {"index.md", "command/time.md", "command/index.md", "nested/directory/page.md"};

@@ -23,6 +23,26 @@ ctest --test-dir build --output-on-failure
 ctest --test-dir build --label-regex unit --output-on-failure
 ```
 
+## Warnings and hardening
+
+Builds enable `-Wall -Wextra -Wpedantic` plus shadowing, implicit conversion, format, prototype, and qualifier warnings. Add `-DSTORIES_WARNINGS_AS_ERRORS=ON` to make them errors, as CI does. Keep new code warning-free on both Clang and GCC.
+
+The server and C tests are hardened by default: stack protector, stack-clash protection, and control-flow protection where the compiler supports them, `_FORTIFY_SOURCE=2` in non-Debug builds, a position-independent executable, and full RELRO with a non-executable stack on linkers that support them. CMake probes each option and skips what the toolchain lacks, so macOS and FreeBSD configure without per-platform logic. Sanitizer and fuzz builds are not hardened, to leave their instrumentation undisturbed. Pass `-DSTORIES_HARDENING=OFF` to disable it. On Linux, check a release build with:
+
+```sh
+readelf -h build/stories | grep Type
+readelf -dW build/stories | grep -E 'BIND_NOW|FLAGS'
+nm -D build/stories | grep -E '__stack_chk_fail|_chk@'
+```
+
+## Formatting
+
+CI fails when C or C++ sources differ from `.clang-format`. Format changed files with `clang-format -i` and check everything with:
+
+```sh
+clang-format --dry-run --Werror src/*.c src/*.cpp src/*.h tests/test_subsystems.c fuzz/*.c
+```
+
 ## Static analysis
 
 With `clang-tidy` installed:
@@ -43,6 +63,16 @@ ctest --test-dir build-sanitize --output-on-failure
 ```
 
 This enables AddressSanitizer and UndefinedBehaviorSanitizer for application code. CMake checks that the selected compiler can provide both runtimes.
+
+ThreadSanitizer cannot share a build with AddressSanitizer, so it has its own option and build tree:
+
+```sh
+cmake -B build-tsan -DSTORIES_THREAD_SANITIZER=ON -DSTORIES_WARNINGS_AS_ERRORS=ON
+cmake --build build-tsan
+ctest --test-dir build-tsan --output-on-failure
+```
+
+CTest sets `TSAN_OPTIONS=halt_on_error=1`, so a reported data race fails the test instead of only printing a report. The HTTP tests drive the multi-threaded CivetWeb server, including shutdown under traffic. Combining `STORIES_THREAD_SANITIZER` with `STORIES_SANITIZERS` or `STORIES_FUZZING` is a configuration error.
 
 ## Fuzzing
 
@@ -71,11 +101,11 @@ mkdir -p build-fuzz/corpus-url build-fuzz/fuzz-artifacts/url_resolver
 
 Pass a saved artifact as the sole positional input to reproduce it. Use libFuzzer's `-minimize_crash=1 -exact_artifact_path=...` options to minimize a finding, or `-merge=1 NEW_CORPUS OLD_CORPUS` to reduce a corpus. Add minimized findings to deterministic regression tests and seeds.
 
-The provider-neutral `tools/ci.sh` runs the sanitizer suites and fuzz smoke tests. It expects the dependencies and a full Clang toolchain to be installed. CI builds the latest upstream release tags of CivetWeb and MD4C first, in an isolated prefix, and records the versions, commits, and source checksums in release archives.
+The provider-neutral `tools/ci.sh` runs the ASan/UBSan and TSan suites and fuzz smoke tests. It expects the dependencies and a full Clang toolchain to be installed. CI builds the latest upstream release tags of CivetWeb and MD4C first, in an isolated prefix, and records the versions, commits, and source checksums in release archives.
 
 ## CI and releases
 
-CI runs on pull requests, pushes to `main`, and merge queue updates. It tests Linux x86-64, macOS Intel and Apple Silicon, and FreeBSD amd64 in a VM. Separate Linux jobs run Clang static analysis and sanitizers/fuzzing. Platform jobs stage installations and test extracted release binaries. Test logs, fuzz findings, and binary archives are retained as workflow artifacts for seven days.
+CI runs on pull requests, pushes to `main`, and merge queue updates. It tests Linux x86-64, macOS Intel and Apple Silicon, and FreeBSD amd64 in a VM. Separate Linux jobs check C and C++ formatting, build and test with optimized GCC, run Clang static analysis, and run sanitizers and fuzzing. CodeQL scans pull requests, pushes to `main`, and a weekly schedule through `.github/workflows/codeql.yml`; leave GitHub's default CodeQL setup disabled so the two do not conflict. Dependabot proposes weekly updates to the pinned GitHub Actions. Platform jobs stage installations and test extracted release binaries. Test logs, fuzz findings, and binary archives are retained as workflow artifacts for seven days.
 
 To create a release, select **Actions → Release → Run workflow** on `main`, then choose **patch**, **minor**, or **major**. Python Semantic Release calculates the version from Git release history. The workflow stamps the build version, tests all platforms, and creates the tag and GitHub Release after successful builds. It uploads complete source and binary archives with checksums. No version edits, bump commits, or manual tagging are needed. Release runs are serialized.
 

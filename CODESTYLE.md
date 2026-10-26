@@ -30,7 +30,7 @@ void document_route_free(struct document_route *route)
 }
 ```
 
-Format changed C files with `clang-format -i`. To check the project's C formatting:
+Format changed C and C++ files with `clang-format -i`. CI enforces the project's formatting with:
 
 ```sh
 clang-format --dry-run --Werror src/*.c src/*.cpp src/*.h tests/test_subsystems.c fuzz/*.c

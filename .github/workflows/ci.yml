@@ -16,6 +16,39 @@ concurrency:
 jobs:
   platforms:
     uses: ./.github/workflows/build.yml
+  format:
+    name: C formatting
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - name: Install tools
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y clang-format
+      - name: Check formatting
+        run: clang-format --dry-run --Werror src/*.c src/*.cpp src/*.h tests/test_subsystems.c fuzz/*.c
+  gcc:
+    name: GCC build and test
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - name: Install tools
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y cmake g++ gcc git ninja-build pkgconf python3
+      - name: Build and test with optimization
+        run: |
+          export CC=gcc CXX=g++
+          python3 tools/build-dependencies.py build-deps
+          cmake -B build-gcc -G Ninja -DCMAKE_BUILD_TYPE=Release -DCMAKE_PREFIX_PATH="$PWD/build-deps" -DSTORIES_WARNINGS_AS_ERRORS=ON
+          cmake --build build-gcc --parallel 2
+          ctest --test-dir build-gcc --output-on-failure --parallel 3
   analysis:
     name: Clang static analysis
     runs-on: ubuntu-22.04
@@ -39,7 +72,7 @@ jobs:
   sanitizers:
     name: Linux sanitizers and fuzzing
     runs-on: ubuntu-22.04
-    timeout-minutes: 15
+    timeout-minutes: 20
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
@@ -48,8 +81,10 @@ jobs:
         run: |
           sudo apt-get update
           sudo apt-get install -y clang cmake git ninja-build pkgconf python3
-      - name: Test with ASan, UBSan, and libFuzzer
+      - name: Test with ASan, UBSan, TSan, and libFuzzer
         run: |
+          # Older LLVM sanitizer runtimes cannot map memory under the runner's default ASLR entropy.
+          sudo sysctl -w vm.mmap_rnd_bits=28
           export CC=clang CXX=clang++
           python3 tools/build-dependencies.py build-deps
           export CMAKE_PREFIX_PATH="$PWD/build-deps"
@@ -64,6 +99,10 @@ jobs:
             build-ci/CMakeFiles/CMakeOutput.log
             build-ci/CMakeFiles/CMakeError.log
             build-ci/Testing/Temporary/
+            build-ci-tsan/CMakeFiles/CMakeConfigureLog.yaml
+            build-ci-tsan/CMakeFiles/CMakeOutput.log
+            build-ci-tsan/CMakeFiles/CMakeError.log
+            build-ci-tsan/Testing/Temporary/
             build-ci-fuzz/CMakeFiles/CMakeConfigureLog.yaml
             build-ci-fuzz/CMakeFiles/CMakeOutput.log
             build-ci-fuzz/CMakeFiles/CMakeError.log
