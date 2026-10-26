@@ -88,7 +88,7 @@ The supplied template loads styles in this order: `/assets/pico.min.css`, `/asse
 
 The supplied template also loads `/assets/dark_toggle.js` and provides a switch with ☀️ and 🌑 icons, styled by `/assets/dark_toggle.css`. It starts in System mode, following the visitor's operating system preference, including later changes. The first click selects the opposite of the current system preference; subsequent clicks toggle only between Light and Dark. These explicit modes set `data-theme` on the page's `<html>` element and override that preference. The choice is remembered in browser local storage when available; switching still works for the current page if storage is blocked. Without JavaScript, the control stays hidden and CSS follows the system preference. See [Pico's color schemes](https://picocss.com/docs/color-schemes).
 
-Stories bundles five self-contained CSS themes. Each includes both variants and works with the same control:
+Stories bundles six self-contained CSS themes. Each includes both variants and works with the same control:
 
 | File | Light variant | Dark variant |
 | --- | --- | --- |
@@ -97,8 +97,9 @@ Stories bundles five self-contained CSS themes. Each includes both variants and 
 | `tomorrow.css` | Tomorrow | Tomorrow Night |
 | `catppuccin.css` | Catppuccin Latte | Catppuccin Mocha |
 | `80s-terminal.css` | White on blue, like WordPerfect | Green on black, like a TTY |
+| `epic.css` | EPIC site's off-white backdrop, white page, and blue links | Navy with logo-inspired orange and lavender accents |
 
-The community themes use their upstream palettes; the terminal theme is an original design with monospace text. Its Light variant intentionally has a blue background. Palette sources and licenses are included in the [bundled theme directory](https://github.com/skullydazed/stories/tree/main/themes).
+The community themes use their upstream palettes; the terminal theme is an original design with monospace text. Its Light variant intentionally has a blue background. The EPIC theme follows the [existing site's](https://epicsol.org/) Arial typography and paper layout in Light mode, with an original Dark palette using orange `#f38d2d`, lavender `#8a90ba`, and navy shades sampled from its [anniversary logo](https://epicsol.org/lib/tpl/dokuwiki/images/logo.png). It does not load remote images or stylesheets. Palette sources and licenses are included in the [bundled theme directory](https://github.com/skullydazed/stories/tree/main/themes).
 
 To activate a theme in the source checkout with the example asset root:
 
