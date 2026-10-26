@@ -36,10 +36,10 @@ All repository modifications occur through standard human-mediated workflows.
 
 This project requires that all automated interactions with the repository comply with GitHub's terms of service and account policies.
 
-- Human user accounts must not be operated by automated systems.
-- Automation must use clearly identified machine or bot identities where permitted by the platform.
+- Human user accounts must not be operated by autonomous systems.
+- AI acting independently from human oversight must use clearly identified machine or bot identities where permitted by the platform.
 - Repository activity must accurately reflect accountable human authorship.
 
-Contributions or interactions that appear to originate from automation operating through a human account, or otherwise violating GitHub policy, will be reported to GitHub.
+Contributions or interactions that appear to originate from autonomous agents operating through a human account, or otherwise violating GitHub policy, will be reported to GitHub.
 
 This requirement exists to preserve accountability, attribution, and the integrity of the contribution process.
