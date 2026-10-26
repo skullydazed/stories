@@ -99,6 +99,8 @@ class HttpTests(unittest.TestCase):
         shutil.copyfile(FIXTURES.parent.parent / 'assets' / 'pico.min.css', self.assets / 'pico.min.css')
         (self.assets / 'sample.txt').write_text('asset bytes\n')
         (self.content / 'private.txt').write_text('must not leak')
+        self.template = self.root / 'page.html'
+        shutil.copyfile(FIXTURES.parent.parent / 'templates' / 'page.html', self.template)
         self.config = self.root / 'stories.conf'
         self.servers = []
 
@@ -110,7 +112,7 @@ class HttpTests(unittest.TestCase):
             self.temporary.cleanup()
 
     def write_config(self, markdown_limit=8388608, output_limit=33554432):
-        self.config.write_text(f'[server]\nlisten=127.0.0.1:0\nthreads=4\n[content]\nroot=content\nresolution_order=disambiguation,command,function\nmarkdown_limit={markdown_limit}\noutput_limit={output_limit}\n[assets]\nroot=assets\n[site]\ntitle=HTTP Test\n[navigation]\nHome=/\n')
+        self.config.write_text(f'[server]\nlisten=127.0.0.1:0\nthreads=4\n[content]\nroot=content\nresolution_order=disambiguation,command,function\nmarkdown_limit={markdown_limit}\noutput_limit={output_limit}\n[assets]\nroot=assets\n[site]\ntitle=HTTP Test\ntemplate=page.html\n[navigation]\nHome=/\n')
 
     def start(self, **limits):
         self.write_config(**limits)
@@ -421,6 +423,189 @@ class HttpTests(unittest.TestCase):
         self.config.write_text('[unknown]\nbad=true\n')
         result = subprocess.run([str(BINARY), '--check-config'], cwd=self.root, capture_output=True, text=True)
         self.assertNotEqual(result.returncode, 0)
+
+    def test_custom_page_template(self):
+        self.template.write_text('''<!doctype html>
+<html data-theme="dark">
+<head><title>{{title}} | {{site_title}}</title><link rel="stylesheet" href="/assets/custom.css"></head>
+<body>
+<nav>{% if navigation %}{% for link in navigation %}<a href='{{link.url}}'>{{link.label}}</a>{% endfor %}{% else %}No navigation{% endif %}</nav>
+{% if error %}<aside>{{title}}: {{message}}</aside>{% else %}<article>{{content()}}</article>{% endif %}
+<footer>My custom layout</footer>
+</body>
+</html>
+''')
+        self.write_config()
+        self.config.write_text(self.config.read_text().replace('title=HTTP Test', 'title=Site & <title>').replace('Home=/\n', 'One & <first>=/first?x=1&y=2\nTwo=/second\'quoted\n'))
+        server = Server(self.config, '/', '--threads', '2')
+        self.servers.append(server)
+        status, headers, body = server.request('/command/time')
+        self.assertEqual(status, 200)
+        self.assertIn(b'<html data-theme="dark">', body)
+        self.assertIn(b' | Site &amp; &lt;title&gt;</title>', body)
+        self.assertIn(b'<link rel="stylesheet" href="/assets/custom.css">', body)
+        self.assertIn(b"<a href='/first?x=1&amp;y=2'>One &amp; &lt;first&gt;</a><a href='/second&apos;quoted'>Two</a>", body)
+        self.assertIn(b'<article><h1>', body)
+        self.assertNotIn(b'&lt;h1&gt;', body)
+        self.assertNotIn(b'<aside>', body)
+        self.assertIn(b'<footer>My custom layout</footer>', body)
+        self.assertNotIn(b'pico.min.css', body)
+        self.assertEqual(server.request('/command/time', 'HEAD')[1]['content-length'], headers['content-length'])
+        self.assertEqual(server.raw('HEAD', '/command/time')[1], b'')
+        for path in ['/missing', '/assets/missing']:
+            status, headers, error = server.request(path)
+            self.assertEqual(status, 404)
+            self.assertIn(b'<aside>Not Found:', error)
+            self.assertNotIn(b'<article>', error)
+            self.assertIn(b'<footer>My custom layout</footer>', error)
+            self.assertEqual(server.request(path, 'HEAD')[1]['content-length'], headers['content-length'])
+            self.assertEqual(server.raw('HEAD', path)[1], b'')
+        self.assertEqual(server.request('/page.html')[0], 404)
+        server.stop()
+        self.config.write_text(self.config.read_text().split('[navigation]')[0])
+        server = Server(self.config, '/')
+        self.servers.append(server)
+        self.assertIn(b'<nav>No navigation</nav>', server.request('/')[2])
+
+    def test_template_loops_and_conditionals(self):
+        self.write_config()
+        self.config.write_text(self.config.read_text().replace('Home=/\n', 'First=/first\nSecond=/second\nThird=/third\n'))
+        server = Server(self.config, self.root)
+        self.servers.append(server)
+        cases = [
+            ('{% for link in navigation %}{{link.label}}{% endfor %}', 'FirstSecondThird'),
+            ('{% for link in navigation %}{{link.label}}|{% endfor %}after:{{site_title}}', 'First|Second|Third|after:HTTP Test'),
+            ('{% for outer in navigation %}{{outer.label}}[{% for inner in navigation %}{{inner.label}},{% endfor %}]{{outer.label}}{% endfor %}', 'First[First,Second,Third,]FirstSecond[First,Second,Third,]SecondThird[First,Second,Third,]Third'),
+            ('{% for link in navigation %}\n{{link.label}}{% endfor %}\n', '\nFirst\nSecond\nThird\n'),
+            ('prefix:{% for link in navigation %}\n{{link.label}}\n{% endfor %}\n', 'prefix:\nFirst\n\nSecond\n\nThird\n\n'),
+            ('  {% for link in navigation %}[{{link.label}}]{% endfor %}\n', '  [First][Second][Third]\n'),
+            ('{% for link in navigation %}\r\n{{link.label}}{% endfor %}\r\n', '\r\nFirst\r\nSecond\r\nThird\r\n'),
+            ('{% for link in navigation %}{{loop.index1}}:{{link.label}};{% endfor %}', '1:First;2:Second;3:Third;'),
+            ('{% if length(navigation) > 2 %}many{% else if navigation %}some{% else %}none{% endif %}', 'many'),
+            ('{% set count = length(navigation) %}{{count}}:{% for link in navigation %}{% if loop.is_first %}first:{% endif %}{{link.label}};{% endfor %}{{count}}', '3:first:First;Second;Third;3'),
+        ]
+        for template, expected in cases:
+            with self.subTest(template=template):
+                self.template.write_text(template)
+                result = subprocess.run([str(BINARY), '--config', str(self.config), '--check-config'], capture_output=True, text=True, timeout=5)
+                self.assertEqual(result.returncode, 0, result.stderr)
+                for path, expected_status in [('/', 200), ('/missing', 404)]:
+                    status, headers, body = server.request(path)
+                    self.assertEqual(status, expected_status)
+                    self.assertEqual(body, expected.encode())
+                    self.assertEqual(int(headers['content-length']), len(body))
+                    head_status, head_headers, head_body = server.request(path, 'HEAD')
+                    self.assertEqual(head_status, status)
+                    self.assertEqual(head_headers['content-length'], headers['content-length'])
+                    self.assertEqual(head_body, b'')
+                    self.assertEqual(server.raw('HEAD', path)[1], b'')
+        self.template.write_text('{% if error and length(navigation) >= 3 %}error{% else %}document{% endif %}')
+        self.assertEqual(server.request('/')[2], b'document')
+        self.assertEqual(server.request('/missing')[2], b'error')
+
+    def test_template_edits_and_replacements_are_live(self):
+        self.template.write_text('<main>{{content()}}</main>original layout{% if error %}original error{% endif %}')
+        server = self.start()
+        self.assertIn(b'original layout', server.request('/')[2])
+        self.template.write_text('<section>{{content()}}</section>updated layout{% if error %}updated error{% endif %}')
+        for path in ['/', '/missing', '/assets/missing']:
+            status, headers, body = server.request(path)
+            self.assertEqual(status, 200 if path == '/' else 404)
+            self.assertIn(b'updated layout', body)
+            self.assertNotIn(b'original layout', body)
+            if status == 404:
+                self.assertIn(b'updated error', body)
+            self.assertEqual(server.request(path, 'HEAD')[1]['content-length'], headers['content-length'])
+            self.assertEqual(server.raw('HEAD', path)[1], b'')
+        replacement = self.root / 'replacement.html'
+        replacement.write_text('<article>{{content()}}</article>replacement layout')
+        replacement.replace(self.template)
+        status, _, body = server.request('/')
+        self.assertEqual(status, 200)
+        self.assertIn(b'replacement layout', body)
+        self.assertNotIn(b'updated layout', body)
+        # Substituted site text and Markdown are not interpreted as templates.
+        (self.content / 'literal.md').write_text('# {{site_title}}\n\n{% if error %}literal{% endif %}\n')
+        status, _, body = server.request('/literal')
+        self.assertEqual(status, 200)
+        self.assertIn(b'<h1>{{site_title}}</h1>', body)
+        self.assertIn(b'{% if error %}literal{% endif %}', body)
+
+    def test_template_failure_after_startup_and_recovery(self):
+        server = self.start()
+        original = self.template.read_bytes()
+        invalid = [b'prefix {% if error %}unclosed', b'prefix {{unknown}}', b'prefix {% if title != "Page" %}{{unknown}}{% endif %}', b'prefix\0hidden', b'x' * (1024 * 1024 + 1), b'']
+        for source in invalid + [None]:
+            with self.subTest(source=source[:40] if source else source):
+                if source is None:
+                    self.template.unlink()
+                else:
+                    self.template.write_bytes(source)
+                status, headers, body = server.request('/')
+                self.assertEqual(status, 500)
+                self.assertNotIn(b'prefix', body)
+                self.assertEqual(body, b'Request failed.\n')
+                self.assertEqual(int(headers['content-length']), len(body))
+                self.assertEqual(server.request('/', 'HEAD')[1]['content-length'], headers['content-length'])
+                self.assertEqual(server.raw('HEAD', '/')[1], b'')
+                self.assertEqual(server.request('/assets/sample.txt')[2], b'asset bytes\n')
+                self.template.write_bytes(original)
+                self.assertEqual(server.request('/')[0], 200)
+
+    def test_template_validation(self):
+        self.write_config()
+        valid = self.config.read_text()
+        self.config.write_text(valid.replace('template=page.html\n', ''))
+        result = subprocess.run([str(BINARY), '--config', str(self.config), '--check-config'], capture_output=True, text=True, timeout=5)
+        self.assertNotEqual(result.returncode, 0)
+        self.assertIn('missing required setting [site] template', result.stderr)
+        self.config.write_text(valid)
+        invalid = [
+            (b'', 'nonempty'),
+            (b'prefix\0hidden', 'NUL'),
+            (b'{% for link in navigation %}missing closing tag', 'invalid Inja template'),
+            (b'{% if error %}{% endfor %}', 'invalid Inja template'),
+            (b'{{site_titel}}', "variable 'site_titel' not found"),
+            (b'{% if error %}{{typo}}{% endif %}', "variable 'typo' not found"),
+            (b'{% for link in navigation %}{{link.typo}}{% endfor %}', "variable 'link.typo' not found"),
+            (b'{% if not navigation %}{{typo}}{% endif %}', "variable 'typo' not found"),
+            (b'{% include "missing.html" %}', "include 'missing.html' not found"),
+            (b'x' * (1024 * 1024 + 1), 'exceeds 1 MiB'),
+        ]
+        for data, diagnostic in invalid:
+            with self.subTest(diagnostic=diagnostic):
+                self.template.write_bytes(data)
+                for option in ['--check-config', '--listen=127.0.0.1:0']:
+                    result = subprocess.run([str(BINARY), '--config', str(self.config), option], capture_output=True, text=True, timeout=5)
+                    self.assertNotEqual(result.returncode, 0)
+                    self.assertNotIn('Listening on', result.stdout)
+                    self.assertIn(str(self.template), result.stderr)
+                    self.assertIn(diagnostic, result.stderr)
+        self.template.unlink()
+        for kind, diagnostic in [('missing', 'cannot open page template'), ('directory', 'regular file'), ('fifo', 'regular file')]:
+            with self.subTest(kind=kind):
+                if kind == 'directory':
+                    self.template.mkdir()
+                elif kind == 'fifo':
+                    os.mkfifo(self.template)
+                result = subprocess.run([str(BINARY), '--config', str(self.config), '--check-config'], capture_output=True, text=True, timeout=5)
+                self.assertNotEqual(result.returncode, 0)
+                self.assertIn(diagnostic, result.stderr)
+                if kind == 'directory':
+                    self.template.rmdir()
+                elif kind == 'fifo':
+                    self.template.unlink()
+
+    def test_template_expansion_obeys_output_limit(self):
+        self.template.write_text('<main>{{content()}}{{content()}}</main>{% if error %}<aside>{{message}}</aside>{% endif %}')
+        (self.content / 'repeated.md').write_text('x' * 700)
+        server = self.start(output_limit=1024)
+        status, headers, body = server.request('/repeated')
+        self.assertEqual(status, 500)
+        self.assertIn(b'<aside>', body)
+        self.assertNotIn(b'x' * 100, body)
+        self.assertEqual(server.request('/repeated', 'HEAD')[1]['content-length'], headers['content-length'])
+        self.assertEqual(server.raw('HEAD', '/repeated')[1], b'')
 
     def test_configuration_diagnostics_and_del(self):
         self.write_config()

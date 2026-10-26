@@ -66,10 +66,17 @@ def main():
         (content / 'index.md').write_text('# Release smoke test\n', encoding='utf-8')
         example = (extracted / 'share/stories/examples/stories.conf.example').read_text(encoding='utf-8')
         example = example.replace('root = docroot', 'root = content').replace('root = assets', 'root = share/stories/assets')
+        example = example.replace('template = templates/page.html', 'template = share/stories/templates/page.html')
         config.write_text(example, encoding='utf-8')
         if (extracted / 'share/stories/assets/pico.min.css').read_bytes() != (root / 'assets/pico.min.css').read_bytes():
             raise SystemExit('installed stylesheet differs from the bundled asset')
+        if (extracted / 'share/stories/templates/page.html').read_bytes() != (root / 'templates/page.html').read_bytes():
+            raise SystemExit('installed page template differs from the source template')
+        for relative in ['share/licenses/stories/inja/LICENSE', 'share/licenses/stories/inja/UPSTREAM.txt', 'share/licenses/stories/nlohmann-json/LICENSE.MIT']:
+            if not (extracted / relative).is_file():
+                raise SystemExit('release is missing dependency provenance: ' + relative)
         run(str(binary), '--config', str(config), '--check-config')
+        run(str(binary), '--config', str(extracted / 'share/stories/examples/docs.conf.example'), '--check-config')
     checksum = hashlib.sha256(archive.read_bytes()).hexdigest()
     archive.with_name(archive.name + '.sha256').write_text(f'{checksum}  {archive.name}\n', encoding='ascii')
     print(archive)

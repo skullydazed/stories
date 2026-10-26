@@ -8,6 +8,7 @@ root = ../assets
 
 [site]
 title = Stories Documentation
+template = ../templates/page.html
 
 [navigation]
 Getting started = /getting-started

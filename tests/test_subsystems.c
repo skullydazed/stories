@@ -3,6 +3,7 @@
 #include "document.h"
 #include "entities.h"
 #include "render.h"
+#include "page_template.h"
 #include "url.h"
 
 #include <fcntl.h>
@@ -24,7 +25,7 @@
 
 static struct configuration test_configuration(void)
 {
-	const char          *text = "[content]\nroot = docs\nresolution_order = disambiguation, command, function\n[assets]\nroot = assets\n[site]\ntitle = Test & <site>\n[navigation]\nHome = /\n";
+	const char          *text = "[content]\nroot = docs\nresolution_order = disambiguation, command, function\n[assets]\nroot = assets\n[site]\ntemplate = page.html\ntitle = Test & <site>\n[navigation]\nHome = /\n";
 	struct configuration configuration;
 	char                 error[256];
 	CHECK(configuration_parse(text, strlen(text), "/tmp", &configuration, error, sizeof(error)));
@@ -60,6 +61,7 @@ static void test_configuration_parser(void)
 	CHECK(configuration.threads == 8);
 	CHECK(configuration.directory_count == 3);
 	CHECK(!strcmp(configuration.content_root, "/tmp/docs"));
+	CHECK(!strcmp(configuration.template_path, "/tmp/page.html"));
 	CHECK(!strcmp(configuration.navigation[0].url, "/"));
 	configuration_free(&configuration);
 	const char *invalid[] = {
@@ -132,6 +134,7 @@ static void test_configuration_diagnostics(void)
 		{"[navigation]\nHome=/\nHome=/other\n", "line 3: [navigation] Home: duplicate navigation label"},
 		{"", "missing required setting [content] root"},
 		{"[content]\nroot=docs\n", "missing required setting [assets] root"},
+		{"[content]\nroot=docs\n[assets]\nroot=assets\n", "missing required setting [site] template"},
 	};
 	struct configuration configuration;
 	char                 error[512];
@@ -156,7 +159,7 @@ static void test_configuration_diagnostics(void)
 		CHECK(strstr(error, diagnostic));
 		configuration_free(&configuration);
 	}
-	const char *valid = "[content]\r\nroot = docs\r\n[assets]\r\nroot = assets\r\n[site]\r\ntitle = Tab\tvalue\r\n";
+	const char *valid = "[content]\r\nroot = docs\r\n[assets]\r\nroot = assets\r\n[site]\r\ntemplate = page.html\r\ntitle = Tab\tvalue\r\n";
 	CHECK(configuration_parse(valid, strlen(valid), "/tmp", &configuration, error, sizeof(error)));
 	configuration_free(&configuration);
 }
@@ -223,7 +226,7 @@ static void write_configuration(const char *path, const char *title)
 {
 	FILE *file = fopen(path, "wb");
 	CHECK(file);
-	CHECK(fprintf(file, "[content]\nroot=docs\n[assets]\nroot=assets\n[site]\ntitle=%s\n", title) > 0);
+	CHECK(fprintf(file, "[content]\nroot=docs\n[assets]\nroot=assets\n[site]\ntemplate=page.html\ntitle=%s\n", title) > 0);
 	CHECK(!fclose(file));
 }
 
@@ -262,7 +265,7 @@ static void test_configuration_discovery(void)
 	CHECK(!mkfifo(local, 0600));
 	CHECK(!configuration_load_search(NULL, search, 2, &configuration, error, sizeof(error)));
 	CHECK(!unlink(local));
-	const char   tail[] = "[content]\nroot=docs\n[assets]\nroot=assets\n[site]\ntitle=block boundary\n";
+	const char   tail[] = "[content]\nroot=docs\n[assets]\nroot=assets\n[site]\ntemplate=page.html\ntitle=block boundary\n";
 	const size_t sizes[] = {4095, 4096, 4097, 8192, 8193};
 	for (size_t i = 0; i < sizeof(sizes) / sizeof(sizes[0]); i++)
 	{
@@ -331,11 +334,21 @@ static void test_resolver(void)
 	configuration_free(&configuration);
 }
 
+static void test_template(struct configuration *configuration)
+{
+	free(configuration->template_path);
+	configuration->template_path = strdup(TEST_FIXTURE_DIR "/../../templates/page.html");
+	CHECK(configuration->template_path);
+	char error[512];
+	CHECK(page_template_check(configuration, error, sizeof(error)));
+}
+
 static void test_renderer(void)
 {
 	struct configuration configuration = test_configuration();
-	const char          *markdown = "# Heading\n\n[inline](../function/time.md?a=1&b=2#x)\n\n[reference][r]\n\n[r]: index.md \"Title &amp; quote\"\n\n[encoded](time&#46;md)\n\n![*rich* <b>label</b>](../assets/image.png \"image title\")\n\n~~gone~~\n\n- [x] done\n\n| A | B |\n|---|---|\n| one | two |\n\n```c\n<code>&\n```\n\nhttps://example.org\n\n<a href=\"raw.md\">raw HTML</a>\n\n&copy; &#x1F600; &NotEqualTilde;\n";
-	struct buffer        output;
+	test_template(&configuration);
+	const char   *markdown = "# Heading\n\n[inline](../function/time.md?a=1&b=2#x)\n\n[reference][r]\n\n[r]: index.md \"Title &amp; quote\"\n\n[encoded](time&#46;md)\n\n![*rich* <b>label</b>](../assets/image.png \"image title\")\n\n~~gone~~\n\n- [x] done\n\n| A | B |\n|---|---|\n| one | two |\n\n```c\n<code>&\n```\n\nhttps://example.org\n\n<a href=\"raw.md\">raw HTML</a>\n\n&copy; &#x1F600; &NotEqualTilde;\n";
+	struct buffer output;
 	CHECK(render_document(&configuration, "command/time.md", markdown, strlen(markdown), &output));
 	const char *expected[] = {"<h1>Heading</h1>", "href=\"/function/time?a=1&amp;b=2#x\"", "href=\"/command/\"", "href=\"/command/time\"", "title=\"Title &amp; quote\"", "src=\"../assets/image.png\"", "alt=\"rich &lt;b&gt;label&lt;/b&gt;\"", "<del>gone</del>", "disabled checked", "<table>", "language-c", "&lt;code&gt;&amp;", "href=\"https://example.org\"", "<a href=\"raw.md\">", "Test &amp; &lt;site&gt;", "\xc2\xa9"};
 	for (size_t i = 0; i < sizeof(expected) / sizeof(expected[0]); i++)
@@ -369,6 +382,7 @@ static void test_renderer(void)
 static void test_renderer_titles(void)
 {
 	struct configuration configuration = test_configuration();
+	test_template(&configuration);
 	static const struct
 	{
 		const char *markdown;

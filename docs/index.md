@@ -8,6 +8,7 @@ Stories is written in C11 using CivetWeb and MD4C. It runs in the foreground beh
 
 - [Getting started](getting-started.md): build Stories, preview these docs, and create your own site.
 - [Configuration](configuration.md): required roots, defaults, command-line options, and validation.
+- [Themes and page layout](themes.md): edit the HTML template, change Pico styling, and set light/dark mode.
 - [Writing and publishing](writing.md): organize documents, link pages, publish assets, and use legacy names.
 - [Deployment](deployment.md): install the server, serve this documentation, configure nginx, and run on FreeBSD.
 - [Troubleshooting](troubleshooting.md): diagnose startup failures, missing pages, render errors, and stale responses.

@@ -22,6 +22,7 @@ struct configuration
 	char                  *content_root;
 	char                  *asset_root;
 	char                  *title;
+	char                  *template_path;
 	char                  *directories[CONFIG_ITEMS];
 	size_t                 directory_count;
 	struct navigation_link navigation[CONFIG_ITEMS];

@@ -18,6 +18,7 @@ enum option_kind
 	OPTION_STRING,
 	OPTION_LISTEN,
 	OPTION_PATH,
+	OPTION_FILE,
 	OPTION_THREADS,
 	OPTION_LIMIT,
 	OPTION_ORDER
@@ -38,6 +39,7 @@ static const struct option_definition options[] = {
 	{"content", "markdown_limit", OPTION_LIMIT, offsetof(struct configuration, markdown_limit)},
 	{"content", "output_limit", OPTION_LIMIT, offsetof(struct configuration, output_limit)},
 	{"site", "title", OPTION_STRING, offsetof(struct configuration, title)},
+	{"site", "template", OPTION_FILE, offsetof(struct configuration, template_path)},
 	{"assets", "root", OPTION_PATH, offsetof(struct configuration, asset_root)},
 };
 
@@ -93,7 +95,7 @@ bool configuration_listen_valid(const char *listen)
 	return inet_pton(family, host, address) == 1;
 }
 
-static char *path_from(const char *base, const char *value, const char **reason)
+static char *path_from(const char *base, const char *value, bool rewrite_path, const char **reason)
 {
 	struct buffer path;
 	buffer_init(&path, STORIES_PATH_LIMIT - 1);
@@ -110,7 +112,7 @@ static char *path_from(const char *base, const char *value, const char **reason)
 		return NULL;
 	}
 	/* CivetWeb's rewrite setting uses commas and equals as syntax. */
-	if (strchr(path.data, ',') || strchr(path.data, '='))
+	if (rewrite_path && (strchr(path.data, ',') || strchr(path.data, '=')))
 	{
 		*reason = "path must not contain ',' or '='";
 		buffer_free(&path);
@@ -125,6 +127,7 @@ void configuration_free(struct configuration *configuration)
 	free(configuration->content_root);
 	free(configuration->asset_root);
 	free(configuration->title);
+	free(configuration->template_path);
 	for (size_t i = 0; i < configuration->directory_count; i++)
 		free(configuration->directories[i]);
 	for (size_t i = 0; i < configuration->navigation_count; i++)
@@ -318,7 +321,7 @@ bool configuration_parse(const char *data, size_t size, const char *base_directo
 		seen[index] = true;
 		const struct option_definition *option = &options[index];
 		char                           *field = (char *)&configuration + option->offset;
-		if (option->kind == OPTION_STRING || option->kind == OPTION_PATH || option->kind == OPTION_LISTEN)
+		if (option->kind == OPTION_STRING || option->kind == OPTION_PATH || option->kind == OPTION_FILE || option->kind == OPTION_LISTEN)
 		{
 			if (option->kind == OPTION_LISTEN && !configuration_listen_valid(value))
 			{
@@ -326,7 +329,7 @@ bool configuration_parse(const char *data, size_t size, const char *base_directo
 				goto fail;
 			}
 			reason = "out of memory";
-			char *replacement = option->kind == OPTION_PATH ? path_from(base_directory, value, &reason) : strdup(value);
+			char *replacement = option->kind == OPTION_PATH || option->kind == OPTION_FILE ? path_from(base_directory, value, option->kind == OPTION_PATH, &reason) : strdup(value);
 			if (!replacement)
 				goto fail;
 			free(*(char **)field);
@@ -369,6 +372,11 @@ bool configuration_parse(const char *data, size_t size, const char *base_directo
 	if (!configuration.asset_root)
 	{
 		reason = "missing required setting [assets] root";
+		goto fail;
+	}
+	if (!configuration.template_path)
+	{
+		reason = "missing required setting [site] template";
 		goto fail;
 	}
 	free(copy);

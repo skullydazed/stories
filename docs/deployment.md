@@ -12,7 +12,7 @@ cmake --build build-release
 cmake --install build-release
 ```
 
-The install command needs permission to write to the selected prefix. CMake installs `bin/stories`, the project documentation, Pico CSS, deployment examples, and licenses. With the prefix above, documentation is under `/usr/local/share/stories/docs`, assets under `/usr/local/share/stories/assets`, and examples under `/usr/local/share/stories/examples`.
+The install command needs permission to write to the selected prefix. CMake installs `bin/stories`, the project documentation, the editable page template, Pico CSS, deployment examples, and licenses. With the prefix above, documentation is under `/usr/local/share/stories/docs`, the template under `/usr/local/share/stories/templates/page.html`, assets under `/usr/local/share/stories/assets`, and examples under `/usr/local/share/stories/examples`.
 
 Installation does not create a service, overwrite `/etc/stories.conf`, create a separate site's content tree, or start the server.
 
@@ -33,7 +33,7 @@ You can run the extracted `bin/stories` in place or install the tree under a cho
 
 ## Serve the project documentation
 
-The supplied documentation configuration works in both the source checkout and the installed tree. It locates the sibling `docs/` and `assets/` directories relative to `examples/`.
+The supplied documentation configuration works in both the source checkout and the installed tree. It locates the sibling `docs/`, `assets/`, and `templates/` directories relative to `examples/`.
 
 For a source checkout:
 
@@ -55,7 +55,7 @@ For an extracted release, run these commands from the extracted directory:
 ./bin/stories --config share/stories/examples/docs.conf.example
 ```
 
-The default endpoint is `127.0.0.1:8080`. For a separate deployment layout, copy the `docs/` tree to your chosen content root and provide an asset root containing `pico.min.css`. Set both roots explicitly in your configuration. Moving a configuration outside the supplied tree requires adjusting its relative paths or using absolute paths.
+The default endpoint is `127.0.0.1:8080`. For a separate deployment layout, copy the `docs/` tree to your chosen content root, provide an asset root containing `pico.min.css`, and copy `templates/page.html` outside those public roots. Set both roots and `[site] template` explicitly in your configuration. Moving a configuration outside the supplied tree requires adjusting its relative paths or using absolute paths. Existing configurations need the required `template` setting when upgrading.
 
 ## Configure nginx
 

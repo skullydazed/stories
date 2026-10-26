@@ -2,9 +2,9 @@
 
 ## Requirements
 
-Install a C11 compiler, pthreads, CivetWeb 1.16 or newer with development headers and static-file support, and MD4C 0.4.8 or newer with development headers. Building and testing also require CMake 3.20 or newer, Make or Ninja, and Python 3.8 or newer. Python is not needed to run the compiled server.
+Install C11 and C++17 compilers, pthreads, CivetWeb 1.16 or newer with development headers and static-file support, and MD4C 0.4.8 or newer with development headers. Building and testing also require CMake 3.20 or newer, Make or Ninja, and Python 3.8 or newer. Python is not needed to run the compiled server.
 
-pkgconf is optional. CMake uses its metadata when available and searches directly for headers and libraries otherwise. Normal builds use installed dependencies and do not download source code.
+pkgconf is optional. CMake uses its metadata when available and searches directly for headers and libraries otherwise. CivetWeb and MD4C use installed libraries. Git checkouts also require Git and network access for the initial configuration: CMake automatically initializes the unmodified Inja submodule at the revision recorded by Stories. Inja includes its nlohmann/json headers. A plain clone is sufficient, and subsequent configurations reuse the available revision. Complete source release archives include Inja and do not require Git; use the uploaded source archive instead of GitHub's automatic source downloads.
 
 On macOS:
 
@@ -24,7 +24,7 @@ cmake --build build
 ctest --test-dir build
 ```
 
-Compiler selection prefers `clang`, then `gcc`, then `cc`. Explicit compiler choices and toolchain files take precedence. Tests are enabled by default.
+Compiler selection prefers `clang`, then `gcc`, then `cc`. C++ defaults to the selected C driver's companion when available, then searches for `clang++`, `g++`, and `c++` in that order. Explicit compiler choices and toolchain files take precedence. Tests are enabled by default.
 
 ## Preview the project documentation
 
@@ -39,7 +39,7 @@ Open <http://127.0.0.1:8080/>. Stop the foreground process with Ctrl-C. The exam
 
 ## Create your own site
 
-Copy `examples/stories.conf.example` to `stories.conf` in the checkout root. The local `stories.conf` is ignored by Git. Its example roots are `docroot/` for Markdown and `assets/` for public assets; the latter already contains the Pico stylesheet used by the page layout.
+Copy `examples/stories.conf.example` to `stories.conf` in the checkout root. The local `stories.conf` is ignored by Git. Its example roots are `docroot/` for Markdown and `assets/` for public assets; the latter already contains the Pico stylesheet used by the page layout. The example's required `[site] template` points to `templates/page.html`, which controls the HTML layout and stylesheet links.
 
 ```sh
 cp examples/stories.conf.example stories.conf
@@ -73,6 +73,6 @@ Create `docroot/install.md` and link to it from `index.md`:
 
 Stories rewrites that link to `/install`. The Markdown file remains private; requests for `/install.md` return 404. A folder needs an authored `index.md` to have an index page.
 
-Read [Writing and publishing](writing.md) for URL rules and [Configuration](configuration.md) for the complete settings reference. For an installed service, continue with [Deployment](deployment.md).
+Read [Writing and publishing](writing.md) for URL rules, [Themes and page layout](themes.md) to customize the HTML and Pico styling, and [Configuration](configuration.md) for the complete settings reference. For an installed service, continue with [Deployment](deployment.md).
 
 [Documentation home](index.md)

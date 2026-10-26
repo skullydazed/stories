@@ -12,9 +12,12 @@ root = /srv/stories/content
 
 [assets]
 root = /srv/stories/assets
+
+[site]
+template = /srv/stories/templates/page.html
 ```
 
-Both directories must exist and be separate: neither may contain the other. Put an `index.md` in the content root and `pico.min.css` in the asset root. The stylesheet is an ordinary public asset; Stories does not locate it in source or installation fallback directories.
+Both directories must exist and be separate: neither may contain the other. Put an `index.md` in the content root and `pico.min.css` in the asset root. Copy the supplied `templates/page.html` to the selected template path, outside the public roots. The template is required; Stories does not use a compiled-in layout. The stylesheet is an ordinary public asset; Stories does not locate it in source or installation fallback directories.
 
 ## Settings
 
@@ -28,6 +31,7 @@ Both directories must exist and be separate: neither may contain the other. Put 
 | `[content] output_limit` | `33554432` | Maximum complete HTML page size: 32 MiB. |
 | `[assets] root` | Required | Existing public static root, separate from content. |
 | `[site] title` | `Stories` | Site name in the layout and after the page title. |
+| `[site] template` | Required | HTML page template, relative to the configuration file or absolute. Checked at startup and read on each render. |
 | `[navigation] Label = URL` | No entries | Navigation links, rendered in configuration order. |
 
 Each document size limit must be positive and at most 1 GiB. The defaults are provisional caps, not measurements of a particular corpus or a guarantee that HTML always expands by less than four times. These limits apply per request; they do not cap the process's total memory use. Rendering that exceeds a limit returns a complete 500 response, without a partial successful page.
@@ -39,6 +43,7 @@ Listener examples include `127.0.0.1:8080` and `[::1]:8080`. Hostnames, multiple
 ```ini
 [site]
 title = Project Documentation
+template = templates/page.html
 
 [navigation]
 Home = /
@@ -49,6 +54,8 @@ Reference = /reference/
 Navigation destinations must be local paths beginning with one `/`, or HTTP(S) URLs. They are configuration values rather than Markdown links, so use extensionless document URLs directly. Duplicate navigation labels are rejected. Stories does not check that a linked document exists at startup.
 
 Each page's title comes from its first Markdown heading at any level. Inline formatting is reduced to text. If that heading is empty or missing, Stories uses the extensionless document basename.
+
+The HTML template controls the layout, stylesheet links, and navigation markup for both documents and errors. See [Themes and page layout](themes.md) for substitutions, loops, Pico customization, and light/dark mode. Template edits appear on the next uncached request, without restarting or rebuilding Stories. Changing the configured template path requires restarting, like other configuration changes.
 
 ## Legacy lookup
 
@@ -70,7 +77,7 @@ Unknown sections or settings, duplicate scalar settings, and disallowed control 
 
 Configured root paths cannot contain commas or equals signs because CivetWeb reserves them in rewrite mappings. Avoid those characters in configured root paths.
 
-Diagnostics identify the file and, when applicable, the line, section, and setting. Validate roots and configuration without starting a listener:
+Diagnostics identify the file and, when applicable, the line, section, and setting. Validate roots, configuration, and the template without starting a listener:
 
 ```sh
 stories --config /etc/stories.conf --check-config
@@ -83,7 +90,7 @@ stories --config /etc/stories.conf --check-config
 | `-c PATH`, `--config PATH` | Select the configuration file. |
 | `--listen ADDRESS:PORT` | Override the configured endpoint. |
 | `--threads COUNT` | Override the configured worker count. |
-| `--check-config` | Validate configuration and roots, then exit. |
+| `--check-config` | Validate configuration, roots, and the page template, then exit. |
 | `-h`, `--help` | Show help without requiring configuration. |
 | `--version` | Show the compiled version without requiring configuration. |
 

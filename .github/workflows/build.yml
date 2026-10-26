@@ -72,6 +72,9 @@ jobs:
           prepare: pkg install -y python3 ninja pkgconf cmake git
           run: |
             set -eu
+            # The VM preserves host ownership for the checkout and submodule directory; trust both for CMake's Git operations.
+            git config --global --add safe.directory "$PWD"
+            git config --global --add safe.directory "$PWD/inja"
             export CC=clang CXX=clang++
             python3 tools/build-dependencies.py build-deps
             cmake -B build-release -G Ninja -DCMAKE_BUILD_TYPE=Release -DCMAKE_PREFIX_PATH="$PWD/build-deps" -DSTORIES_STATIC_DEPENDENCIES=ON -DSTORIES_WARNINGS_AS_ERRORS=ON

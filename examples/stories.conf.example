@@ -14,6 +14,9 @@ root = docroot
 
 [site]
 title = Stories
+template = templates/page.html
+# Edit the HTML template to change layout, stylesheet links, or light/dark mode.
+# Template edits appear on the next uncached request.
 
 [navigation]
 # Anything defined here will be added as navigational links in the default layout.
