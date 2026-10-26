@@ -165,3 +165,9 @@ a
 {
 	text-decoration: underline;
 }
+
+/* Reverse selected text against the selection background in both modes. */
+::selection
+{
+	color: var(--stories-inverse);
+}
