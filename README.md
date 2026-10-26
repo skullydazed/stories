@@ -53,7 +53,7 @@ Compiler selection prefers `clang`, then `gcc`, then `cc`. C++ defaults to the s
 
 ## Run your own site
 
-Copy [examples/stories.conf.example](examples/stories.conf.example) to `stories.conf`, create a Markdown root with `index.md`, and set a separate public asset root containing `pico.min.css`. The example selects the editable [templates/page.html](templates/page.html) for the HTML layout. Paths resolve relative to the configuration file. The local `stories.conf` is ignored by Git.
+Copy [examples/stories.conf.example](examples/stories.conf.example) to `stories.conf`, create a Markdown root with `index.md`, and set a separate public asset root containing `pico.min.css`, `dark_toggle.css`, `theme.css`, `site.css`, and `theme.js`. The example selects the editable [templates/page.html](templates/page.html) for the HTML layout. Paths resolve relative to the configuration file. The local `stories.conf` is ignored by Git.
 
 ```sh
 ./build/stories --check-config
@@ -66,6 +66,6 @@ Without `--config`, Stories checks `./stories.conf`, then `/etc/stories.conf`, a
 
 Follow [CODESTYLE.md](CODESTYLE.md) and the [design contracts](docs/design.md). Publishing content is restricted to trusted maintainers because raw HTML passes through.
 
-Stories is MIT licensed; see [LICENSE.md](LICENSE.md). The bundled Pico CSS stylesheet includes its [MIT license](assets/LICENSE.pico.md).
+Stories is MIT licensed; see [LICENSE.md](LICENSE.md). The bundled Pico CSS stylesheet includes its [MIT license](assets/LICENSE.pico.md). The [optional bundled themes](themes/README.md) include light and dark variants with upstream palette attribution and licenses.
 
 Inja and its bundled nlohmann/json dependency are MIT licensed; their licenses ship with installed binaries. Both remain unmodified upstream source. See [Inja](https://github.com/pantor/inja) and [nlohmann/json](https://github.com/nlohmann/json).

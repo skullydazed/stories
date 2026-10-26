@@ -1,0 +1,176 @@
+/*
+Tomorrow / Tomorrow Night
+https://github.com/chriskempson/tomorrow-theme
+Copy this file to theme.css in the configured asset root. Both modes are included.
+
+LICENSE
+
+Tomorrow Theme is released under the MIT License:
+
+Copyright (C) 2011 [Chris Kempson](https://github.com/chriskempson)
+
+Permission is hereby granted, free of charge, to any person obtaining
+a copy of this software and associated documentation files (the
+"Software"), to deal in the Software without restriction, including
+without limitation the rights to use, copy, modify, merge, publish,
+distribute, sublicense, and/or sell copies of the Software, and to
+permit persons to whom the Software is furnished to do so, subject to
+the following conditions:
+
+The above copyright notice and this permission notice shall be
+included in all copies or substantial portions of the Software.
+
+THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND,
+EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF
+MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE AND
+NONINFRINGEMENT. IN NO EVENT SHALL THE AUTHORS OR COPYRIGHT HOLDERS BE
+LIABLE FOR ANY CLAIM, DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION
+OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION
+WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
+*/
+
+/* Palette aliases override Pico in both explicit and system modes. */
+:root:not([data-theme]),
+:root[data-theme]
+{
+	--pico-background-color: var(--stories-background);
+	--pico-color: var(--stories-foreground);
+	--pico-text-selection-color: var(--stories-selection);
+	--pico-muted-color: var(--stories-muted);
+	--pico-muted-border-color: var(--stories-border);
+	--pico-primary: var(--stories-primary);
+	--pico-primary-background: var(--stories-primary);
+	--pico-primary-border: var(--stories-primary);
+	--pico-primary-underline: var(--stories-primary);
+	--pico-primary-hover: var(--stories-hover);
+	--pico-primary-hover-background: var(--stories-hover);
+	--pico-primary-hover-border: var(--stories-hover);
+	--pico-primary-hover-underline: var(--stories-hover);
+	--pico-primary-focus: var(--stories-selection);
+	--pico-primary-inverse: var(--stories-inverse);
+	--pico-secondary: var(--stories-secondary);
+	--pico-secondary-background: var(--stories-secondary);
+	--pico-secondary-border: var(--stories-secondary);
+	--pico-secondary-underline: var(--stories-secondary);
+	--pico-secondary-hover: var(--stories-hover);
+	--pico-secondary-hover-background: var(--stories-hover);
+	--pico-secondary-hover-border: var(--stories-hover);
+	--pico-secondary-hover-underline: var(--stories-hover);
+	--pico-secondary-focus: var(--stories-selection);
+	--pico-secondary-inverse: var(--stories-inverse);
+	--pico-contrast: var(--stories-heading);
+	--pico-contrast-background: var(--stories-heading);
+	--pico-contrast-border: var(--stories-heading);
+	--pico-contrast-underline: var(--stories-heading);
+	--pico-contrast-hover: var(--stories-foreground);
+	--pico-contrast-hover-background: var(--stories-foreground);
+	--pico-contrast-hover-border: var(--stories-foreground);
+	--pico-contrast-hover-underline: var(--stories-foreground);
+	--pico-contrast-focus: var(--stories-selection);
+	--pico-contrast-inverse: var(--stories-background);
+	--pico-h1-color: var(--stories-heading);
+	--pico-h2-color: var(--stories-heading);
+	--pico-h3-color: var(--stories-heading);
+	--pico-h4-color: var(--stories-heading);
+	--pico-h5-color: var(--stories-heading);
+	--pico-h6-color: var(--stories-heading);
+	--pico-mark-background-color: var(--stories-mark);
+	--pico-mark-color: var(--stories-mark-text);
+	--pico-ins-color: var(--stories-green);
+	--pico-del-color: var(--stories-red);
+	--pico-table-row-stripped-background-color: var(--stories-surface);
+	--pico-code-background-color: var(--stories-surface);
+	--pico-code-color: var(--stories-code);
+	--pico-form-element-background-color: var(--stories-surface);
+	--pico-form-element-selected-background-color: var(--stories-selection);
+	--pico-form-element-border-color: var(--stories-border);
+	--pico-form-element-color: var(--stories-foreground);
+	--pico-form-element-placeholder-color: var(--stories-muted);
+	--pico-form-element-active-background-color: var(--stories-background);
+	--pico-form-element-invalid-border-color: var(--stories-red);
+	--pico-form-element-invalid-active-border-color: var(--stories-red);
+	--pico-form-element-invalid-focus-color: var(--stories-red);
+	--pico-form-element-valid-border-color: var(--stories-green);
+	--pico-form-element-valid-active-border-color: var(--stories-green);
+	--pico-form-element-valid-focus-color: var(--stories-green);
+	--pico-switch-background-color: var(--stories-border);
+	--pico-switch-color: var(--stories-inverse);
+	--pico-range-border-color: var(--stories-border);
+	--pico-range-active-border-color: var(--stories-selection);
+	--pico-card-background-color: var(--stories-background);
+	--pico-card-border-color: var(--stories-border);
+	--pico-card-sectioning-background-color: var(--stories-surface);
+	--pico-dropdown-background-color: var(--stories-surface);
+	--pico-dropdown-border-color: var(--stories-border);
+	--pico-dropdown-hover-background-color: var(--stories-selection);
+	--pico-progress-background-color: var(--stories-surface);
+	--pico-box-shadow: none;
+	--pico-modal-overlay-background-color: var(--stories-selection);
+}
+
+/* Light mode is the fallback when no system preference is available. */
+:root:not([data-theme="dark"])
+{
+	color-scheme: light;
+	--stories-background: #ffffff;
+	--stories-foreground: #4d4d4c;
+	--stories-heading: #4d4d4c;
+	--stories-muted: #8e908c;
+	--stories-surface: #efefef;
+	--stories-border: #d6d6d6;
+	--stories-selection: #d6d6d6;
+	--stories-primary: #4271ae;
+	--stories-hover: #8959a8;
+	--stories-secondary: #3e999f;
+	--stories-code: #8959a8;
+	--stories-red: #c82829;
+	--stories-green: #718c00;
+	--stories-mark: #eab700;
+	--stories-mark-text: #4d4d4c;
+	--stories-inverse: #ffffff;
+}
+
+@media (prefers-color-scheme: dark)
+{
+	:root:not([data-theme])
+	{
+		color-scheme: dark;
+		--stories-background: #1d1f21;
+		--stories-foreground: #c5c8c6;
+		--stories-heading: #c5c8c6;
+		--stories-muted: #969896;
+		--stories-surface: #282a2e;
+		--stories-border: #373b41;
+		--stories-selection: #373b41;
+		--stories-primary: #81a2be;
+		--stories-hover: #b294bb;
+		--stories-secondary: #8abeb7;
+		--stories-code: #b294bb;
+		--stories-red: #cc6666;
+		--stories-green: #b5bd68;
+		--stories-mark: #f0c674;
+		--stories-mark-text: var(--stories-inverse);
+		--stories-inverse: #1d1f21;
+	}
+}
+
+:root[data-theme="dark"]
+{
+	color-scheme: dark;
+	--stories-background: #1d1f21;
+	--stories-foreground: #c5c8c6;
+	--stories-heading: #c5c8c6;
+	--stories-muted: #969896;
+	--stories-surface: #282a2e;
+	--stories-border: #373b41;
+	--stories-selection: #373b41;
+	--stories-primary: #81a2be;
+	--stories-hover: #b294bb;
+	--stories-secondary: #8abeb7;
+	--stories-code: #b294bb;
+	--stories-red: #cc6666;
+	--stories-green: #b5bd68;
+	--stories-mark: #f0c674;
+	--stories-mark-text: var(--stories-inverse);
+	--stories-inverse: #1d1f21;
+}

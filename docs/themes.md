@@ -37,6 +37,7 @@ For example:
 	<meta name="viewport" content="width=device-width, initial-scale=1">
 	<title>{{title}} — {{site_title}}</title>
 	<link rel="stylesheet" href="/assets/pico.min.css">
+	<link rel="stylesheet" href="/assets/theme.css">
 	<link rel="stylesheet" href="/assets/site.css">
 </head>
 <body>
@@ -70,13 +71,13 @@ The configured `output_limit` applies to the complete expanded document, includi
 
 If a template becomes unreadable or invalid while the server is running, affected document requests return 500; Stories does not serve a retained older layout. Correcting the template restores rendering on the next uncached request. Static assets continue to use CivetWeb's handler.
 
-## Change the Pico theme
+## Custom CSS and bundled themes
 
 The bundled stylesheet is Pico CSS 2.1.1. It is an ordinary file under the configured asset root, served at `/assets/pico.min.css` by the supplied template.
 
 To change its color palette, select a stylesheet with [Pico's theme picker](https://picocss.com/docs/version-picker) and put it in the asset root. Replace `pico.min.css`, or give it another name and update the template's stylesheet link. Preserve the accompanying license when distributing it.
 
-For custom colors, typography, or spacing, create `site.css` in the asset root and load it after Pico, as shown above. Pico's [CSS variables](https://picocss.com/docs/css-variables) provide the customization points. For example:
+The supplied template loads styles in this order: `/assets/pico.min.css`, `/assets/dark_toggle.css`, `/assets/theme.css`, then `/assets/site.css`. `dark_toggle.css` styles the switch, `theme.css` selects the color theme, and `site.css` holds independent site customization. Both `theme.css` and `site.css` contain only a comment by default, preserving Pico's colors. Put site-specific colors, typography, or spacing in `site.css`; changing the theme does not replace those customizations. Pico's [CSS variables](https://picocss.com/docs/css-variables) provide the customization points. For example:
 
 ```css
 :root {
@@ -85,7 +86,27 @@ For custom colors, typography, or spacing, create `site.css` in the asset root a
 }
 ```
 
-Pico follows the visitor's system preference for light or dark mode. To force a mode, change the template's opening element to `<html lang="en" data-theme="light">` or `<html lang="en" data-theme="dark">`. See [Pico's color schemes](https://picocss.com/docs/color-schemes).
+The supplied template also loads `/assets/theme.js` and provides a switch with ☀️ and 🌑 icons, styled by `/assets/dark_toggle.css`. It starts in System mode, following the visitor's operating system preference, including later changes. The first click selects the opposite of the current system preference; subsequent clicks toggle only between Light and Dark. These explicit modes set `data-theme` on the page's `<html>` element and override that preference. The choice is remembered in browser local storage when available; switching still works for the current page if storage is blocked. Without JavaScript, the control stays hidden and CSS follows the system preference. See [Pico's color schemes](https://picocss.com/docs/color-schemes).
+
+Stories bundles five self-contained CSS themes. Each includes both variants and works with the same control:
+
+| File | Light variant | Dark variant |
+| --- | --- | --- |
+| `solarized.css` | Solarized Light | Solarized Dark |
+| `dracula.css` | Alucard, Dracula's official light palette | Dracula |
+| `tomorrow.css` | Tomorrow | Tomorrow Night |
+| `catppuccin.css` | Catppuccin Latte | Catppuccin Mocha |
+| `80s-terminal.css` | White on blue, like WordPerfect | Green on black, like a TTY |
+
+The community themes use their upstream palettes; the terminal theme is an original design with monospace text. Its Light variant intentionally has a blue background. Palette sources and licenses are included in the [bundled theme directory](https://github.com/skullydazed/stories/tree/main/themes).
+
+To activate a theme in the source checkout with the example asset root:
+
+```sh
+cp themes/solarized.css assets/theme.css
+```
+
+For an installed release, copy the chosen file from `share/stories/themes/` into your configured asset root as `theme.css`. Retain `pico.min.css`, `dark_toggle.css`, `site.css`, and `theme.js` in the asset root. No configuration edit or restart is needed. Replacing `theme.css` with an empty file or a CSS comment restores Pico's default palette while retaining `site.css` customizations. A custom page template must include these stylesheet links and the switcher markup/script to provide the same behavior.
 
 CSS and template edits appear on the next uncached request. Changing configuration values, including the selected template path, requires a restart. A reverse proxy or browser cache can delay visible changes; verify against the backend when diagnosing stale styling.
 

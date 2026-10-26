@@ -45,7 +45,7 @@ Check recent link edits for malformed percent escapes in `.md` destinations, att
 
 ## The layout has no stylesheet
 
-The supplied template links `/assets/pico.min.css`; custom templates may select a different stylesheet. Request that stylesheet URL directly. The file must be present in the configured asset root. The checkout includes Pico under `assets/`, and installations include it under `share/stories/assets`.
+The supplied template links `/assets/pico.min.css`, `/assets/dark_toggle.css`, `/assets/theme.css`, and `/assets/site.css`; custom templates may select different stylesheets. Request that stylesheet URL directly. The file must be present in the configured asset root. The checkout includes these files under `assets/`, and installations include them under `share/stories/assets`. If the Color scheme control is missing, also check that `/assets/theme.js` loads and JavaScript is enabled.
 
 Stories does not search a source-tree or installed fallback directory. A missing stylesheet returns 404 without preventing startup. If other assets fail, verify their `/assets/` URL and the configured root. HTML/XHTML files, Markdown sources, directory listings, and implicit static index pages are deliberately unavailable.
 
