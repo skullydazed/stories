@@ -1,0 +1,276 @@
+/*
+EPIC
+Light variant follows https://epicsol.org/ (off-white backdrop, white page, Arial, blue links).
+Dark variant is an original Stories design inspired by the EPIC anniversary logo:
+https://epicsol.org/lib/tpl/dokuwiki/images/logo.png
+Sampled orange: #f38d2d; lavender: #8a90ba; navy shades: #12131c, #191b26, #222431.
+Copy this file to theme.css in the configured asset root. Both modes are included.
+
+Copyright 2026 Zach White <zwhite@darkstar.frop.org>
+
+Permission is hereby granted, free of charge, to any person obtaining a copy of this software and associated documentation files (the “Software”), to deal in the Software without restriction, including without limitation the rights to use, copy, modify, merge, publish, distribute, sublicense, and/or sell copies of the Software, and to permit persons to whom the Software is furnished to do so, subject to the following conditions:
+
+The above copyright notice and this permission notice shall be included in all copies or substantial portions of the Software.
+
+THE SOFTWARE IS PROVIDED “AS IS”, WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
+*/
+
+/* Presentation defaults remain overridable from site.css. */
+:root
+{
+	--pico-font-family: Arial, sans-serif;
+	--pico-font-size: 87.5%;
+	--pico-line-height: 1.4;
+	--pico-font-weight: 400;
+	--pico-border-radius: 2px;
+	--pico-typography-spacing-vertical: 1.4rem;
+}
+
+/* Palette aliases override Pico in both explicit and system modes. */
+:root:not([data-theme]),
+:root[data-theme]
+{
+	--pico-background-color: var(--stories-background);
+	--pico-color: var(--stories-foreground);
+	--pico-text-selection-color: var(--stories-selection);
+	--pico-muted-color: var(--stories-muted);
+	--pico-muted-border-color: var(--stories-border);
+	--pico-primary: var(--stories-primary);
+	--pico-primary-background: var(--stories-primary);
+	--pico-primary-border: var(--stories-primary);
+	--pico-primary-underline: var(--stories-primary);
+	--pico-primary-hover: var(--stories-hover);
+	--pico-primary-hover-background: var(--stories-hover);
+	--pico-primary-hover-border: var(--stories-hover);
+	--pico-primary-hover-underline: var(--stories-hover);
+	--pico-primary-focus: var(--stories-selection);
+	--pico-primary-inverse: var(--stories-inverse);
+	--pico-secondary: var(--stories-secondary);
+	--pico-secondary-background: var(--stories-secondary);
+	--pico-secondary-border: var(--stories-secondary);
+	--pico-secondary-underline: var(--stories-secondary);
+	--pico-secondary-hover: var(--stories-hover);
+	--pico-secondary-hover-background: var(--stories-hover);
+	--pico-secondary-hover-border: var(--stories-hover);
+	--pico-secondary-hover-underline: var(--stories-hover);
+	--pico-secondary-focus: var(--stories-selection);
+	--pico-secondary-inverse: var(--stories-inverse);
+	--pico-contrast: var(--stories-heading);
+	--pico-contrast-background: var(--stories-heading);
+	--pico-contrast-border: var(--stories-heading);
+	--pico-contrast-underline: var(--stories-heading);
+	--pico-contrast-hover: var(--stories-foreground);
+	--pico-contrast-hover-background: var(--stories-foreground);
+	--pico-contrast-hover-border: var(--stories-foreground);
+	--pico-contrast-hover-underline: var(--stories-foreground);
+	--pico-contrast-focus: var(--stories-selection);
+	--pico-contrast-inverse: var(--stories-background);
+	--pico-h1-color: var(--stories-heading);
+	--pico-h2-color: var(--stories-heading);
+	--pico-h3-color: var(--stories-heading);
+	--pico-h4-color: var(--stories-heading);
+	--pico-h5-color: var(--stories-heading);
+	--pico-h6-color: var(--stories-heading);
+	--pico-mark-background-color: var(--stories-mark);
+	--pico-mark-color: var(--stories-mark-text);
+	--pico-ins-color: var(--stories-ins);
+	--pico-del-color: var(--stories-del);
+	--pico-table-row-stripped-background-color: var(--stories-surface);
+	--pico-code-background-color: var(--stories-surface);
+	--pico-code-color: var(--stories-code);
+	--pico-form-element-background-color: var(--stories-surface);
+	--pico-form-element-selected-background-color: var(--stories-selection);
+	--pico-form-element-border-color: var(--stories-border);
+	--pico-form-element-color: var(--stories-foreground);
+	--pico-form-element-placeholder-color: var(--stories-muted);
+	--pico-form-element-active-background-color: var(--stories-background);
+	--pico-form-element-invalid-border-color: var(--stories-red);
+	--pico-form-element-invalid-active-border-color: var(--stories-red);
+	--pico-form-element-invalid-focus-color: var(--stories-red);
+	--pico-form-element-valid-border-color: var(--stories-green);
+	--pico-form-element-valid-active-border-color: var(--stories-green);
+	--pico-form-element-valid-focus-color: var(--stories-green);
+	--pico-switch-background-color: var(--stories-border);
+	--pico-switch-color: var(--stories-inverse);
+	--pico-range-border-color: var(--stories-border);
+	--pico-range-active-border-color: var(--stories-selection);
+	--pico-card-background-color: var(--stories-background);
+	--pico-card-border-color: var(--stories-border);
+	--pico-card-sectioning-background-color: var(--stories-surface);
+	--pico-dropdown-background-color: var(--stories-surface);
+	--pico-dropdown-border-color: var(--stories-border);
+	--pico-dropdown-hover-background-color: var(--stories-selection);
+	--pico-progress-background-color: var(--stories-surface);
+	--pico-box-shadow: 0 0 0.5rem var(--stories-shadow);
+	--pico-modal-overlay-background-color: var(--stories-selection);
+}
+
+/* Light mode follows the existing EPIC website. */
+:root:not([data-theme="dark"])
+{
+	color-scheme: light;
+	--stories-background: #fbfaf9;
+	--stories-foreground: #333333;
+	--stories-heading: #333333;
+	--stories-muted: #666666;
+	--stories-surface: #fbfaf9;
+	--stories-border: #cccccc;
+	--stories-selection: #d9e7f5;
+	--stories-primary: #2b73b7;
+	--stories-hover: #2b73b7;
+	--stories-secondary: #2b73b7;
+	--stories-code: #333333;
+	--stories-red: #dd3300;
+	--stories-green: #008800;
+	--stories-mark: #ffff99;
+	--stories-mark-text: #333333;
+	--stories-inverse: #ffffff;
+	--stories-page: #ffffff;
+	--stories-page-border: #eeeeee;
+	--stories-gradient: rgba(0, 7, 14, 0.114);
+	--stories-shadow: rgba(0, 0, 0, 0.4);
+	--stories-selection-text: var(--stories-foreground);
+	--stories-ins: var(--stories-foreground);
+	--stories-del: var(--stories-foreground);
+	--pico-icon-checkbox: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='24' height='24' viewBox='0 0 24 24' fill='none' stroke='%23ffffff' stroke-width='4' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpolyline points='20 6 9 17 4 12'%3E%3C/polyline%3E%3C/svg%3E");
+	--pico-icon-minus: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='24' height='24' viewBox='0 0 24 24' fill='none' stroke='%23ffffff' stroke-width='4' stroke-linecap='round' stroke-linejoin='round'%3E%3Cline x1='5' y1='12' x2='19' y2='12'%3E%3C/line%3E%3C/svg%3E");
+}
+
+@media (prefers-color-scheme: dark)
+{
+	:root:not([data-theme])
+	{
+		color-scheme: dark;
+		--stories-background: #12131c;
+		--stories-foreground: #efefef;
+		--stories-heading: #8a90ba;
+		--stories-muted: #8a90ba;
+		--stories-surface: #222431;
+		--stories-border: #4e526b;
+		--stories-selection: #4e526b;
+		--stories-primary: #f38d2d;
+		--stories-hover: #ffb36a;
+		--stories-secondary: #8a90ba;
+		--stories-code: #f38d2d;
+		--stories-red: #f2998d;
+		--stories-green: #9ecb9a;
+		--stories-mark: #f38d2d;
+		--stories-mark-text: #12131c;
+		--stories-inverse: #12131c;
+		--stories-page: #191b26;
+		--stories-page-border: #313445;
+		--stories-gradient: rgba(138, 144, 186, 0.12);
+		--stories-shadow: rgba(0, 0, 0, 0.5);
+		--stories-selection-text: var(--stories-foreground);
+		--stories-ins: var(--stories-green);
+		--stories-del: var(--stories-red);
+		--pico-icon-checkbox: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='24' height='24' viewBox='0 0 24 24' fill='none' stroke='%2312131c' stroke-width='4' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpolyline points='20 6 9 17 4 12'%3E%3C/polyline%3E%3C/svg%3E");
+		--pico-icon-minus: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='24' height='24' viewBox='0 0 24 24' fill='none' stroke='%2312131c' stroke-width='4' stroke-linecap='round' stroke-linejoin='round'%3E%3Cline x1='5' y1='12' x2='19' y2='12'%3E%3C/line%3E%3C/svg%3E");
+	}
+}
+
+:root[data-theme="dark"]
+{
+	color-scheme: dark;
+	--stories-background: #12131c;
+	--stories-foreground: #efefef;
+	--stories-heading: #8a90ba;
+	--stories-muted: #8a90ba;
+	--stories-surface: #222431;
+	--stories-border: #4e526b;
+	--stories-selection: #4e526b;
+	--stories-primary: #f38d2d;
+	--stories-hover: #ffb36a;
+	--stories-secondary: #8a90ba;
+	--stories-code: #f38d2d;
+	--stories-red: #f2998d;
+	--stories-green: #9ecb9a;
+	--stories-mark: #f38d2d;
+	--stories-mark-text: #12131c;
+	--stories-inverse: #12131c;
+	--stories-page: #191b26;
+	--stories-page-border: #313445;
+	--stories-gradient: rgba(138, 144, 186, 0.12);
+	--stories-shadow: rgba(0, 0, 0, 0.5);
+	--stories-selection-text: var(--stories-foreground);
+	--stories-ins: var(--stories-green);
+	--stories-del: var(--stories-red);
+	--pico-icon-checkbox: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='24' height='24' viewBox='0 0 24 24' fill='none' stroke='%2312131c' stroke-width='4' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpolyline points='20 6 9 17 4 12'%3E%3C/polyline%3E%3C/svg%3E");
+	--pico-icon-minus: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='24' height='24' viewBox='0 0 24 24' fill='none' stroke='%2312131c' stroke-width='4' stroke-linecap='round' stroke-linejoin='round'%3E%3Cline x1='5' y1='12' x2='19' y2='12'%3E%3C/line%3E%3C/svg%3E");
+}
+
+/* Recreate the site's softly shaded backdrop and bordered paper content. */
+body
+{
+	min-height: 100vh;
+	background: linear-gradient(var(--stories-gradient), transparent 115px) no-repeat;
+}
+
+body > header.container,
+body > main.container
+{
+	width: calc(100% - 2rem);
+	max-width: 75rem;
+}
+
+body > header.container
+{
+	padding: 2rem 0 1.5rem;
+}
+
+body > header nav > ul:first-child a
+{
+	color: var(--stories-heading);
+}
+
+body > main.container
+{
+	margin-bottom: 2rem;
+	padding: 1.556rem 2rem 2rem;
+	border: 1px solid var(--stories-page-border);
+	border-radius: var(--pico-border-radius);
+	background: var(--stories-page);
+	box-shadow: var(--pico-box-shadow);
+}
+
+h1, h2, h3, h4, h5, h6
+{
+	--pico-font-weight: 700;
+	line-height: 1.2;
+}
+
+h1 { --pico-font-size: 2rem; }
+h2 { --pico-font-size: 1.5rem; }
+h3 { --pico-font-size: 1.125rem; }
+h4 { --pico-font-size: 1rem; }
+h5 { --pico-font-size: 0.875rem; }
+h6 { --pico-font-size: 0.75rem; }
+
+a
+{
+	--pico-text-decoration: none;
+}
+
+a:hover,
+a:focus-visible
+{
+	--pico-text-decoration: underline;
+}
+
+::selection
+{
+	color: var(--stories-selection-text);
+}
+
+@media (max-width: 800px)
+{
+	body > header.container
+	{
+		padding: 1rem 0;
+	}
+
+	body > main.container
+	{
+		padding: 1rem;
+	}
+}

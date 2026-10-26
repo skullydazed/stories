@@ -4,7 +4,11 @@
 	<meta charset="utf-8">
 	<meta name="viewport" content="width=device-width, initial-scale=1">
 	<title>{{title}} — {{site_title}}</title>
+	<script src="/assets/dark_toggle.js"></script>
 	<link rel="stylesheet" href="/assets/pico.min.css">
+	<link rel="stylesheet" href="/assets/dark_toggle.css">
+	<link rel="stylesheet" href="/assets/theme.css">
+	<link rel="stylesheet" href="/assets/site.css">
 </head>
 <body>
 	<header class="container">
@@ -16,6 +20,12 @@
 				{% for link in navigation %}
 				<li><a href="{{link.url}}">{{link.label}}</a></li>
 				{% endfor %}
+				<li id="theme-control" hidden>
+					<button id="theme-switcher" type="button" role="switch" aria-checked="false" aria-label="Dark mode">
+						<span aria-hidden="true">☀️</span>
+						<span aria-hidden="true">🌑</span>
+					</button>
+				</li>
 			</ul>
 		</nav>
 	</header>

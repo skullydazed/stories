@@ -17,7 +17,7 @@ root = /srv/stories/assets
 template = /srv/stories/templates/page.html
 ```
 
-Both directories must exist and be separate: neither may contain the other. Put an `index.md` in the content root and `pico.min.css` in the asset root. Copy the supplied `templates/page.html` to the selected template path, outside the public roots. The template is required; Stories does not use a compiled-in layout. The stylesheet is an ordinary public asset; Stories does not locate it in source or installation fallback directories.
+Both directories must exist and be separate: neither may contain the other. Put an `index.md` in the content root and `pico.min.css`, `dark_toggle.css`, `theme.css`, `site.css`, and `dark_toggle.js` in the asset root. Copy the supplied `templates/page.html` to the selected template path, outside the public roots. The template is required; Stories does not use a compiled-in layout. The stylesheet is an ordinary public asset; Stories does not locate it in source or installation fallback directories.
 
 ## Settings
 

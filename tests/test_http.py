@@ -97,6 +97,8 @@ class HttpTests(unittest.TestCase):
         shutil.copytree(FIXTURES, self.content)
         self.assets.mkdir()
         shutil.copyfile(FIXTURES.parent.parent / 'assets' / 'pico.min.css', self.assets / 'pico.min.css')
+        for name in ['dark_toggle.css', 'theme.css', 'site.css', 'dark_toggle.js']:
+            shutil.copyfile(FIXTURES.parent.parent / 'assets' / name, self.assets / name)
         (self.assets / 'sample.txt').write_text('asset bytes\n')
         (self.content / 'private.txt').write_text('must not leak')
         self.template = self.root / 'page.html'
@@ -219,6 +221,31 @@ class HttpTests(unittest.TestCase):
         self.assertEqual(server.request('/assets/pico.min.css')[0], 200)
         self.assertEqual(server.request('/_stories/pico.min.css')[0], 404)
         self.assertEqual(server.request('/pico.min.css')[0], 404)
+
+    def test_custom_stylesheet_is_loaded_and_edits_are_live(self):
+        server = self.start()
+        for path, expected_status in [('/', 200), ('/missing', 404)]:
+            status, _, body = server.request(path)
+            self.assertEqual(status, expected_status)
+            stylesheets = ['pico.min.css', 'dark_toggle.css', 'theme.css', 'site.css']
+            positions = [body.index(f'href="/assets/{name}"'.encode()) for name in stylesheets]
+            self.assertEqual(positions, sorted(positions))
+            self.assertIn(b'src="/assets/dark_toggle.js"', body)
+            self.assertIn(b'<button id="theme-switcher" type="button"', body)
+            self.assertIn(b'role="switch"', body)
+            self.assertIn('☀️'.encode(), body)
+            self.assertIn('🌑'.encode(), body)
+            self.assertIn(b'href="/assets/theme.css"', body)
+        self.assertEqual(server.request('/assets/dark_toggle.js')[0], 200)
+        self.assertEqual(server.request('/assets/dark_toggle.css')[0], 200)
+        self.assertEqual(server.request('/assets/theme.css')[0], 200)
+        stylesheet = self.assets / 'site.css'
+        for css in ['body { color: red; }', 'body { color: green; }']:
+            stylesheet.write_text(css)
+            status, headers, body = server.request('/assets/site.css')
+            self.assertEqual(status, 200)
+            self.assertIn('text/css', headers['content-type'])
+            self.assertEqual(body.decode(), css)
 
     def test_static_html_and_implicit_indexes_are_not_served(self):
         for name in ['page.html', 'page.HTML', 'page.htm', 'page.xhtml', 'page.shtml']:

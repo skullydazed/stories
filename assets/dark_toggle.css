@@ -1,0 +1,52 @@
+/* Appearance of the light/dark switch, independent of the color theme and site customization. */
+#theme-switcher
+{
+	position: relative;
+	display: inline-grid;
+	grid-template-columns: 1fr 1fr;
+	align-items: center;
+	width: 4.5rem;
+	height: 2.25rem;
+	margin: 0;
+	padding: 0.125rem;
+	border: 1px solid var(--pico-muted-border-color);
+	border-radius: 2rem;
+	background: var(--pico-code-background-color);
+	box-shadow: none;
+	font-size: 1.1rem;
+	line-height: 1;
+}
+
+#theme-switcher::before
+{
+	content: "";
+	position: absolute;
+	top: 0.125rem;
+	bottom: 0.125rem;
+	left: 0.125rem;
+	width: calc(50% - 0.25rem);
+	border-radius: inherit;
+	background: var(--pico-primary-background);
+	transition: left var(--pico-transition);
+}
+
+#theme-switcher[aria-checked="true"]::before
+{
+	left: calc(50% + 0.125rem);
+}
+
+#theme-switcher span
+{
+	position: relative;
+}
+
+#theme-switcher:hover
+{
+	border-color: var(--pico-primary);
+}
+
+#theme-switcher:focus-visible
+{
+	outline: 2px solid var(--pico-primary);
+	outline-offset: 0.125rem;
+}
