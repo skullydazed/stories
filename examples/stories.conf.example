@@ -4,6 +4,12 @@
 #listen = 127.0.0.1:8080
 #threads = 8
 
+# Omit either path to keep access logs on stdout and errors on stderr.
+# Files are appended; parent directories must exist. SIGUSR1 reopens the files.
+[logging]
+#access_log = /var/log/stories/access.log
+#error_log = /var/log/stories/error.log
+
 [content]
 root = docroot
 #resolution_order = 

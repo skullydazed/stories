@@ -32,6 +32,8 @@ struct option_definition
 };
 
 static const struct option_definition options[] = {
+	{"logging", "access_log", OPTION_FILE, offsetof(struct configuration, access_log_path)},
+	{"logging", "error_log", OPTION_FILE, offsetof(struct configuration, error_log_path)},
 	{"server", "listen", OPTION_LISTEN, offsetof(struct configuration, listen)},
 	{"server", "threads", OPTION_THREADS, offsetof(struct configuration, threads)},
 	{"content", "root", OPTION_PATH, offsetof(struct configuration, content_root)},
@@ -128,6 +130,8 @@ void configuration_free(struct configuration *configuration)
 	free(configuration->asset_root);
 	free(configuration->title);
 	free(configuration->template_path);
+	free(configuration->access_log_path);
+	free(configuration->error_log_path);
 	for (size_t i = 0; i < configuration->directory_count; i++)
 		free(configuration->directories[i]);
 	for (size_t i = 0; i < configuration->navigation_count; i++)
@@ -262,7 +266,7 @@ bool configuration_parse(const char *data, size_t size, const char *base_directo
 			}
 			*closing = '\0';
 			memcpy(section, line + 1, length + 1);
-			if (strcmp(section, "server") && strcmp(section, "content") && strcmp(section, "site") && strcmp(section, "navigation") && strcmp(section, "assets"))
+			if (strcmp(section, "server") && strcmp(section, "content") && strcmp(section, "site") && strcmp(section, "navigation") && strcmp(section, "assets") && strcmp(section, "logging"))
 			{
 				reason = "unknown section";
 				goto fail;

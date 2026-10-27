@@ -23,6 +23,8 @@ struct configuration
 	char                  *asset_root;
 	char                  *title;
 	char                  *template_path;
+	char                  *access_log_path;
+	char                  *error_log_path;
 	char                  *directories[CONFIG_ITEMS];
 	size_t                 directory_count;
 	struct navigation_link navigation[CONFIG_ITEMS];

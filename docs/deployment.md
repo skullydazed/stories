@@ -61,6 +61,16 @@ The default endpoint is `127.0.0.1:8080`. For a separate deployment layout, copy
 
 The repository's [nginx example](https://github.com/skullydazed/stories/blob/main/examples/nginx.conf) is also installed as `share/stories/examples/nginx.conf`. Include its directives in the appropriate nginx contexts and adjust the hostname, certificate paths, upstream endpoint, and cache location for your deployment. The `proxy_cache_path` directive belongs in nginx's `http` context.
 
+Both server blocks reject `%00` by matching the original `$request_uri`, before redirecting or proxying:
+
+```nginx
+if ($request_uri ~ "%00") {
+    return 400;
+}
+```
+
+The match includes query parameters and leaves `%2500` untouched. CivetWeb performs URL decoding, and direct backend requests may truncate at a decoded NUL. The backend does not implement a separate encoded-NUL rejection path. [nginx documents `$request_uri`](https://nginx.org/en/docs/http/ngx_http_core_module.html#var_request_uri) as the original request URI including arguments.
+
 Keep Stories bound to loopback when nginx runs on the same host. Make the cache directory writable by nginx, and test the configuration before reloading:
 
 ```sh
@@ -68,6 +78,14 @@ nginx -t
 ```
 
 The example caches successful pages and permanent redirects for 60 seconds, leaves 404s uncached, and lets the proxy control freshness for static assets. Edits and redirect changes can remain hidden until cached responses expire. Choose the cache policy to match your publishing process; nginx documents the controls in its [proxy caching reference](https://nginx.org/en/docs/http/ngx_http_proxy_module.html#proxy_cache_valid).
+
+After applying the example, verify `/index%00junk` and `/?value=%00` return 400, while `/assets/%70ico.min.css` still serves the stylesheet. `%2500` is not rejected by this rule; the backend resolves the resulting literal `%00` filename normally.
+
+## Log files
+
+Stories defaults to access records on stdout and error diagnostics on stderr. The service account needs write access to configured log files and their parent directories. Use `[logging] access_log` and `error_log`, or `--access-log` and `--error-log`, for independent append-mode destinations. See [Logging](configuration.md#logging) for path resolution and startup behavior.
+
+After external rename/create rotation, send SIGUSR1 to the Stories process to reopen its configured log paths. A failed reopen retains both current destinations and reports the failure. Restarting also reopens the paths. Rotation and retention belong to the service's external log-management policy.
 
 ## Run as a FreeBSD service
 
