@@ -101,7 +101,7 @@ mkdir -p build-fuzz/corpus-url build-fuzz/fuzz-artifacts/url_resolver
 
 Pass a saved artifact as the sole positional input to reproduce it. Use libFuzzer's `-minimize_crash=1 -exact_artifact_path=...` options to minimize a finding, or `-merge=1 NEW_CORPUS OLD_CORPUS` to reduce a corpus. Add minimized findings to deterministic regression tests and seeds.
 
-The provider-neutral `tools/ci.sh` runs the ASan/UBSan and TSan suites and fuzz smoke tests. It expects the dependencies and a full Clang toolchain to be installed. CI builds the latest upstream release tags of CivetWeb and MD4C first, in an isolated prefix, and records the versions, commits, and source checksums in release archives.
+The provider-neutral `tools/ci.sh` runs the ASan/UBSan and TSan suites and fuzz smoke tests. It expects the dependencies and a full Clang toolchain to be installed. CI builds the latest upstream release tags of CivetWeb and MD4C first, in an isolated prefix, and records the versions, commits, and source checksums in release archives. The dependency build enables CivetWeb's `REENTRANT_TIME` switch so worker threads format access timestamps using `localtime_r` and `gmtime_r` without shared result storage. Upstream source remains unmodified.
 
 ## CI and releases
 

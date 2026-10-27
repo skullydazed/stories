@@ -17,6 +17,8 @@ import urllib.request
 DEPENDENCIES = [
     ('civetweb', 'civetweb/civetweb', [
         '-DCIVETWEB_BUILD_TESTING=OFF', '-DCIVETWEB_ENABLE_SERVER_EXECUTABLE=OFF', '-DCIVETWEB_ENABLE_CXX=OFF', '-DCIVETWEB_ENABLE_SSL=OFF', '-DCIVETWEB_ENABLE_ASAN=OFF',
+        # Access records are formatted on worker threads before Stories' logging callback.
+        '-DCMAKE_C_FLAGS=-DREENTRANT_TIME',
     ]),
     ('md4c', 'mity/md4c', [
         '-DBUILD_MD2HTML_EXECUTABLE=OFF',
