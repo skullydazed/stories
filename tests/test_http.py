@@ -395,8 +395,7 @@ class HttpTests(unittest.TestCase):
     def test_log_file_creation_permissions(self):
         self.write_config(access_log='access.log', error_log='error.log')
         self.template.write_text('{% invalid %}')
-        # Fail after logging opens, so no listener is needed. Set umask only in
-        # the child shell, without changing the test process or using preexec_fn.
+        # Fail after logging opens, so no listener is needed. Set umask only in the child shell, without changing the test process or using preexec_fn.
         command = ['sh', '-c', 'umask "$1"; shift; exec "$@"', 'stories-permissions', '000', str(BINARY), '--config', str(self.config)]
         result = subprocess.run(command, capture_output=True, text=True, timeout=5)
         self.assertNotEqual(result.returncode, 0)
