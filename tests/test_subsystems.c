@@ -59,6 +59,7 @@ static void test_configuration_parser(void)
 {
 	struct configuration configuration = test_configuration();
 	CHECK(configuration.threads == 8);
+	CHECK(!configuration.access_log_path && !configuration.error_log_path);
 	CHECK(configuration.directory_count == 3);
 	CHECK(!strcmp(configuration.content_root, "/tmp/docs"));
 	CHECK(!strcmp(configuration.template_path, "/tmp/page.html"));
@@ -88,7 +89,12 @@ static void test_configuration_parser(void)
 		CHECK(error[0]);
 		configuration_free(&configuration);
 	}
-	char error[256];
+	char        error[256];
+	const char *logs = "[content]\nroot=docs\n[assets]\nroot=assets\n[site]\ntemplate=page.html\n[logging]\naccess_log=logs/access.log\nerror_log=/var/log/stories-error.log\n";
+	CHECK(configuration_parse(logs, strlen(logs), "/tmp", &configuration, error, sizeof(error)));
+	CHECK(!strcmp(configuration.access_log_path, "/tmp/logs/access.log"));
+	CHECK(!strcmp(configuration.error_log_path, "/var/log/stories-error.log"));
+	configuration_free(&configuration);
 	CHECK(!configuration_parse("[site]\ntitle=x\0hidden", 21, "/tmp", &configuration, error, sizeof(error)));
 	size_t number;
 	CHECK(configuration_unsigned("1024", 1024, &number) && number == 1024);
@@ -112,6 +118,8 @@ static void test_configuration_diagnostics(void)
 		const char *input;
 		const char *diagnostic;
 	} cases[] = {
+		{"[logging]\naccess_log=\n", "line 2: [logging] access_log: value must not be empty"},
+		{"[logging]\nerror_log=a\nerror_log=b\n", "line 3: [logging] error_log: duplicate setting"},
 		{"[server]\nthreads=0\n", "line 2: [server] threads: expected an integer from 1 to 1024"},
 		{"[server]\nthreads=8\nthreads=4\n", "line 3: [server] threads: duplicate setting"},
 		{"[server]\nthreds=8\n", "line 2: [server] threds: unknown setting"},

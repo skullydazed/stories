@@ -1,12 +1,12 @@
 #include "server.h"
 #include "document.h"
+#include "logging.h"
 #include "render.h"
 #include "url.h"
 
 #include <civetweb.h>
 #include <errno.h>
 #include <fcntl.h>
-#include <limits.h>
 #include <pthread.h>
 #include <signal.h>
 #include <stdio.h>
@@ -18,9 +18,9 @@
 struct server
 {
 	const struct configuration *configuration;
-	const char                 *asset_root;
 	int                         content_fd;
 	struct mg_context          *context;
+	struct logging             *logging;
 };
 
 static bool path_contains(const char *parent, const char *child)
@@ -93,6 +93,7 @@ static int send_error(struct mg_connection *connection, const struct server *ser
 	struct buffer body;
 	if (!render_error(server->configuration, title, message, &body))
 	{
+		logging_error(server->logging, "cannot render error page for status %d", status);
 		buffer_free(&body);
 		buffer_init(&body, 64);
 		buffer_puts(&body, "Request failed.\n");
@@ -100,26 +101,6 @@ static int send_error(struct mg_connection *connection, const struct server *ser
 	int result = send_response(connection, status, title, status == 405 ? "Allow: GET, HEAD\r\n" : NULL, &body);
 	buffer_free(&body);
 	return result;
-}
-
-static int send_encoded_asset(struct mg_connection *connection, const struct server *server, const char *path)
-{
-	struct buffer filename;
-	buffer_init(&filename, STORIES_PATH_LIMIT - 1);
-	buffer_puts(&filename, server->asset_root);
-	buffer_puts(&filename, "/");
-	buffer_puts(&filename, path + 8);
-	if (filename.failed)
-	{
-		buffer_free(&filename);
-		return send_error(connection, server, 400, "Bad Request", "Asset path is too long.");
-	}
-	/* Automatic URI decoding is disabled so embedded NULs cannot truncate a
-	 * request before validation. For encoded assets, give the validated filename
-	 * to CivetWeb directly; it still owns MIME, ranges, caching, and HEAD handling. */
-	mg_send_mime_file(connection, filename.data, NULL);
-	buffer_free(&filename);
-	return 1;
 }
 
 static int request_begin(struct mg_connection *connection)
@@ -130,20 +111,13 @@ static int request_begin(struct mg_connection *connection)
 	if (strcmp(request->request_method, "GET") && strcmp(request->request_method, "HEAD"))
 		return send_error(connection, server, 405, "Method Not Allowed", "Use GET or HEAD.");
 
-	/* Preserve the original encoded path with decode_url=no. CivetWeb's default
-	 * in-place decoding inserts NULs into request_uri/local_uri_raw before this
-	 * callback; strlen on those strings would hide the rest of a hostile path.
-	 * Validate the decoder's full byte count before using any decoded C string.
-	 * The final argument is zero because URL paths are not form-encoded data. */
-	const char *encoded_path = request->local_uri_raw;
-	if (!encoded_path)
+	/* CivetWeb has decoded this path, but has not removed dot segments from
+	 * local_uri_raw. Validate before using its cleaned path for static serving.
+	 * The front proxy rejects %00; direct requests retain CivetWeb's truncation. */
+	const char *path = request->local_uri_raw;
+	if (!path || !url_path_valid(path, strlen(path)))
 		return send_error(connection, server, 400, "Bad Request", "Invalid document path.");
-	size_t encoded_size = strlen(encoded_path);
-	char   path[STORIES_PATH_LIMIT];
-	int    decoded_size = encoded_size > INT_MAX ? -1 : mg_url_decode(encoded_path, (int)encoded_size, path, (int)sizeof(path), 0);
-	if (decoded_size < 0 || !url_path_valid(path, (size_t)decoded_size))
-		return send_error(connection, server, 400, "Bad Request", "Invalid document path.");
-	size_t path_size = (size_t)decoded_size;
+	size_t path_size = strlen(path);
 	bool   asset = !strncmp(path, "/assets/", 8);
 	if (url_markdown_extension(path, path_size) || (!asset && url_path_has_extension(path, path_size)))
 		return send_error(connection, server, 404, "Not Found", "No document exists at this URL.");
@@ -154,7 +128,7 @@ static int request_begin(struct mg_connection *connection)
 		const char *mime = mg_get_builtin_mime_type(path);
 		if (!strcmp(mime, "text/html") || !strcmp(mime, "application/xhtml+xml"))
 			return send_error(connection, server, 404, "Not Found", "No document exists at this URL.");
-		return !strcmp(encoded_path, path) ? 0 : send_encoded_asset(connection, server, path);
+		return 0;
 	}
 	if (!strcmp(path, "/assets"))
 		return send_error(connection, server, 404, "Not Found", "No document exists at this URL.");
@@ -190,7 +164,7 @@ static int request_begin(struct mg_connection *connection)
 		if (!rendered)
 		{
 			buffer_free(&html);
-			fprintf(stderr, "cannot read/render document: %s (I/O error, invalid link/template, or configured limit)\n", route.source);
+			logging_error(server->logging, "cannot read/render document: %s (I/O error, invalid link/template, or configured limit)", route.source);
 			result = send_error(connection, server, 500, "Internal Server Error", "The document could not be rendered.");
 		}
 		else
@@ -200,7 +174,10 @@ static int request_begin(struct mg_connection *connection)
 	else if (route.status == ROUTE_INVALID)
 		result = send_error(connection, server, 400, "Bad Request", "Invalid document path.");
 	else if (route.status == ROUTE_FAILURE)
+	{
+		logging_error(server->logging, "cannot resolve document: %s", path);
 		result = send_error(connection, server, 500, "Internal Server Error", "The document could not be opened.");
+	}
 	else
 		result = send_error(connection, server, 404, "Not Found", "No document exists at this URL.");
 	document_route_free(&route);
@@ -209,16 +186,25 @@ static int request_begin(struct mg_connection *connection)
 
 static int log_message(const struct mg_connection *connection, const char *message)
 {
-	(void)connection;
-	fprintf(stderr, "civetweb: %s\n", message);
+	struct server *server = connection ? mg_get_user_data(mg_get_context(connection)) : NULL;
+	logging_error(server ? server->logging : NULL, "civetweb: %s", message);
+	return 1;
+}
+
+static int log_access(const struct mg_connection *connection, const char *message)
+{
+	struct server *server = mg_get_user_data(mg_get_context(connection));
+	logging_access(server->logging, message);
+	/* Suppress CivetWeb's file writer because Stories owns the destination. */
 	return 1;
 }
 
 static int http_error(struct mg_connection *connection, int status, const char *message)
 {
-	(void)message;
 	const struct mg_request_info *request = mg_get_request_info(connection);
 	struct server                *server = mg_get_user_data(mg_get_context(connection));
+	if (server && status >= 500)
+		logging_error(server->logging, "civetweb HTTP %d: %s", status, message ? message : "request failed");
 	/* Parsing errors can precede a usable request. Leave those to CivetWeb.
 	 * For established requests, this also corrects CivetWeb 1.16's default HEAD
 	 * error body while using the same bounded shell as document errors. */
@@ -230,9 +216,9 @@ static int http_error(struct mg_connection *connection, int status, const char *
 	return 0;
 }
 
-int server_run(const struct configuration *configuration)
+int server_run(const struct configuration *configuration, struct logging *logging)
 {
-	struct server server = {.configuration = configuration, .content_fd = -1};
+	struct server server = {.configuration = configuration, .content_fd = -1, .logging = logging};
 	char          content[STORIES_PATH_LIMIT], assets[STORIES_PATH_LIMIT];
 	char          error[512], threads[32];
 	struct buffer rewrites;
@@ -243,25 +229,26 @@ int server_run(const struct configuration *configuration)
 	buffer_init(&rewrites, STORIES_PATH_LIMIT * 3);
 	if (!resolve_roots(configuration, content, assets, error, sizeof(error)))
 	{
-		fprintf(stderr, "%s\n", error);
+		logging_error(logging, "%s", error);
 		goto done;
 	}
 	if (strchr(assets, ',') || strchr(assets, '='))
 	{
-		fprintf(stderr, "asset paths cannot contain comma or equals (CivetWeb rewrite delimiters)\n");
+		logging_error(logging, "asset paths cannot contain comma or equals (CivetWeb rewrite delimiters)");
 		goto done;
 	}
 	buffer_puts(&rewrites, "/assets/=");
 	buffer_puts(&rewrites, assets);
 	buffer_puts(&rewrites, "/");
 	if (rewrites.failed)
+	{
+		logging_error(logging, "cannot build asset rewrite mapping");
 		goto done;
-	/* This startup buffer outlives every request and remains immutable until mg_stop. */
-	server.asset_root = assets;
+	}
 	server.content_fd = open(content, O_RDONLY | O_DIRECTORY | O_CLOEXEC | O_NOFOLLOW);
 	if (server.content_fd < 0)
 	{
-		fprintf(stderr, "cannot open content root: %s\n", strerror(errno));
+		logging_error(logging, "cannot open content root: %s", strerror(errno));
 		goto done;
 	}
 	/* Block before creating workers so all of them inherit the signal mask.
@@ -270,16 +257,24 @@ int server_run(const struct configuration *configuration)
 	/* Darwin's sigaddset macro triggers GCC's sign-conversion warning; use the POSIX function. */
 	(sigaddset)(&signals, SIGINT);
 	(sigaddset)(&signals, SIGTERM);
-	if (pthread_sigmask(SIG_BLOCK, &signals, &old_signals))
+	(sigaddset)(&signals, SIGUSR1);
+	int signal_error = pthread_sigmask(SIG_BLOCK, &signals, &old_signals);
+	if (signal_error)
+	{
+		logging_error(logging, "cannot block server signals: %s", strerror(signal_error));
 		goto done;
+	}
 	signals_blocked = true;
 	struct sigaction ignore_pipe = {.sa_handler = SIG_IGN};
 	sigemptyset(&ignore_pipe.sa_mask);
 	if (sigaction(SIGPIPE, &ignore_pipe, NULL))
+	{
+		logging_error(logging, "cannot ignore SIGPIPE: %s", strerror(errno));
 		goto done;
+	}
 	if (!(mg_init_library(MG_FEATURES_FILES) & MG_FEATURES_FILES))
 	{
-		fprintf(stderr, "cannot initialize CivetWeb\n");
+		logging_error(logging, "cannot initialize CivetWeb");
 		goto done;
 	}
 	initialized = true;
@@ -306,7 +301,7 @@ int server_run(const struct configuration *configuration)
 		"max_request_size",
 		"16384",
 		"decode_url",
-		"no",
+		"yes",
 		"decode_query_string",
 		"no",
 		"static_file_max_age",
@@ -327,20 +322,40 @@ int server_run(const struct configuration *configuration)
 				break;
 			}
 	settings[count] = NULL;
-	const struct mg_callbacks callbacks = {.begin_request = request_begin, .log_message = log_message, .http_error = http_error};
+	const struct mg_callbacks callbacks = {.begin_request = request_begin, .log_message = log_message, .log_access = log_access, .http_error = http_error};
 	server.context = mg_start(&callbacks, &server, settings);
 	if (!server.context)
 	{
-		fprintf(stderr, "cannot start HTTP listener\n");
+		logging_error(logging, "cannot start HTTP listener");
 		goto done;
 	}
 	struct mg_server_port port;
 	if (mg_get_server_ports(server.context, 1, &port) != 1)
+	{
+		logging_error(logging, "cannot determine HTTP listener port");
 		goto done;
+	}
 	printf("Listening on %s (port %d)\n", configuration->listen, port.port);
 	fflush(stdout);
 	int signal_number;
-	result = sigwait(&signals, &signal_number) ? 1 : 0;
+	for (;;)
+	{
+		signal_error = sigwait(&signals, &signal_number);
+		if (signal_error)
+		{
+			logging_error(logging, "cannot wait for signal: %s", strerror(signal_error));
+			break;
+		}
+		if (signal_number != SIGUSR1)
+		{
+			result = 0;
+			break;
+		}
+		if (!logging_reopen(logging, error, sizeof(error)))
+			logging_error(logging, "%s; keeping existing logs", error);
+		else
+			logging_error(logging, "log files reopened");
+	}
 
 done:
 	if (server.context)

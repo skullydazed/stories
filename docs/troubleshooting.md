@@ -1,6 +1,6 @@
 # Troubleshooting
 
-Start with the server's diagnostic output and a direct backend request. A reverse proxy can cache a response that differs from the current document or configuration.
+Start with the server's diagnostic output and a direct backend request. Access logs default to stdout and errors to stderr; `[logging] access_log` and `error_log` select append-mode files. See [Logging](configuration.md#logging) for CLI overrides and SIGUSR1 reopening. A reverse proxy can cache a response that differs from the current document or configuration.
 
 ## The server will not start
 
@@ -35,7 +35,7 @@ For legacy names, inspect `resolution_order`. Direct document and index lookup t
 
 ## A page returns 400 or 405
 
-Malformed paths, including encoded NULs, dot segments, repeated separators, backslashes, and control bytes, return 400. GET and HEAD are supported; other methods return 405 with `Allow: GET, HEAD`.
+Malformed decoded paths, including dot segments, repeated separators, backslashes, and control bytes visible to Stories, return 400. The nginx example rejects `%00` in the original request URI, including query parameters. Direct backend requests retain CivetWeb's native NUL truncation behavior. GET and HEAD are supported; other methods return 405 with `Allow: GET, HEAD`.
 
 ## A page returns 500
 

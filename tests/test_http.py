@@ -6,7 +6,6 @@ import http.client
 import os
 import pathlib
 import re
-import selectors
 import shutil
 import signal
 import socket
@@ -25,32 +24,38 @@ FIXTURES = pathlib.Path(__file__).resolve().parent / 'fixtures'
 class Server:
     def __init__(self, config, cwd, *overrides):
         self.errors = tempfile.TemporaryFile()
-        self.process = subprocess.Popen([str(BINARY), '--config', str(config), *overrides], cwd=cwd, stdout=subprocess.PIPE, stderr=self.errors, text=True)
+        self.output_file = tempfile.TemporaryFile()
+        self.process = subprocess.Popen([str(BINARY), '--config', str(config), *overrides], cwd=cwd, stdout=self.output_file, stderr=self.errors)
         self.port = None
         try:
             deadline = time.monotonic() + 10
-            with selectors.DefaultSelector() as selector:
-                selector.register(self.process.stdout, selectors.EVENT_READ)
-                while time.monotonic() < deadline:
-                    if selector.select(timeout=0.1):
-                        line = self.process.stdout.readline()
-                        match = re.search(r'Listening on .+ \(port (\d+)\)', line)
-                        if match:
-                            self.port = int(match.group(1))
-                            self.request('/')
-                            return
-                        if not line:
-                            break
+            while time.monotonic() < deadline:
+                match = re.search(r'Listening on .+ \(port (\d+)\)', self.output())
+                if match:
+                    self.port = int(match.group(1))
+                    self.request('/')
+                    return
+                if self.process.poll() is not None:
+                    break
+                time.sleep(0.01)
             raise RuntimeError('server did not become ready')
         except Exception:
             self.stop()
             diagnostic = self.diagnostics()
             self.errors.close()
+            self.output_file.close()
             raise RuntimeError(diagnostic) from None
 
     def diagnostics(self):
-        self.errors.seek(0)
-        return self.errors.read().decode('utf-8', errors='replace')
+        return self.read_output(self.errors)
+
+    @staticmethod
+    def read_output(stream):
+        # pread leaves the child's shared file offset untouched during traffic.
+        return os.pread(stream.fileno(), os.fstat(stream.fileno()).st_size, 0).decode('utf-8', errors='replace')
+
+    def output(self):
+        return self.read_output(self.output_file)
 
     def request(self, path, method='GET', headers=None):
         connection = http.client.HTTPConnection('127.0.0.1', self.port, timeout=3)
@@ -78,14 +83,13 @@ class Server:
                 self.process.kill()
                 self.process.wait()
                 raise AssertionError('server did not shut down within ten seconds')
-        if self.process.stdout:
-            self.process.stdout.close()
 
     def close(self):
         try:
             self.stop()
         finally:
             self.errors.close()
+            self.output_file.close()
 
 
 class HttpTests(unittest.TestCase):
@@ -113,8 +117,15 @@ class HttpTests(unittest.TestCase):
         finally:
             self.temporary.cleanup()
 
-    def write_config(self, markdown_limit=8388608, output_limit=33554432):
+    def write_config(self, markdown_limit=8388608, output_limit=33554432, access_log=None, error_log=None):
         self.config.write_text(f'[server]\nlisten=127.0.0.1:0\nthreads=4\n[content]\nroot=content\nresolution_order=disambiguation,command,function\nmarkdown_limit={markdown_limit}\noutput_limit={output_limit}\n[assets]\nroot=assets\n[site]\ntitle=HTTP Test\ntemplate=page.html\n[navigation]\nHome=/\n')
+        if access_log is not None or error_log is not None:
+            with self.config.open('a') as config:
+                config.write('[logging]\n')
+                if access_log is not None:
+                    config.write(f'access_log={access_log}\n')
+                if error_log is not None:
+                    config.write(f'error_log={error_log}\n')
 
     def start(self, **limits):
         self.write_config(**limits)
@@ -306,20 +317,16 @@ class HttpTests(unittest.TestCase):
                 self.assertNotIn(b'must not leak', body)
         self.assertEqual(server.request('/command/%252e%252e/time')[0], 404)
 
-    def test_encoded_nul_paths_are_rejected(self):
+    def test_direct_backend_uses_civetweb_nul_truncation(self):
         server = self.start()
-        paths = ['/%00', '/index%00junk', '/command/time%00.md', '/time%00_command', '/assets/sample.txt%00junk', '/assets/pico.min.css%00junk', '/assets/%00/sample.txt']
-        for path in paths:
+        for path, target in [('/index%00junk', '/index'), ('/command/time%00.md', '/command/time'), ('/assets/sample.txt%00junk', '/assets/sample.txt')]:
             for method in ['GET', 'HEAD']:
                 with self.subTest(path=path, method=method):
                     status, headers, body = server.request(path, method)
-                    self.assertEqual(status, 400)
-                    self.assertNotIn('location', headers)
-                    if method == 'HEAD':
-                        self.assertEqual(body, b'')
-                        wire_headers, wire_body = server.raw(method, path)
-                        self.assertIn(b' 400 ', wire_headers.split(b'\r\n', 1)[0])
-                        self.assertEqual(wire_body, b'')
+                    expected_status, expected_headers, expected_body = server.request(target, method)
+                    self.assertEqual(status, expected_status)
+                    self.assertEqual(headers.get('location'), expected_headers.get('location'))
+                    self.assertEqual(body, expected_body)
 
     def test_request_paths_are_decoded_once(self):
         (self.content / 'command' / '%00.md').write_text('# Literal percent zero\n')
@@ -329,13 +336,172 @@ class HttpTests(unittest.TestCase):
         server = self.start()
         self.assertIn(b'Literal percent zero', server.request('/command/%2500')[2])
         self.assertEqual(server.request('/assets/%2500.txt')[2], b'literal percent zero')
-        for path in ['/command/a+b', '/command/a%2Bb']:
-            self.assertIn(b'Literal plus', server.request(path)[2])
-        for path in ['/assets/a+b.txt', '/assets/a%2Bb.txt']:
-            self.assertEqual(server.request(path)[2], b'literal plus')
+        self.assertEqual(server.request('/command/a+b')[0], 404)
+        self.assertIn(b'Literal plus', server.request('/command/a%2Bb')[2])
+        self.assertEqual(server.request('/assets/a+b.txt')[0], 404)
+        self.assertEqual(server.request('/assets/a%2Bb.txt')[2], b'literal plus')
         status, headers, _ = server.request('/index?value=%00')
         self.assertEqual(status, 301)
         self.assertEqual(headers['location'], '/?value=%00')
+
+    def wait_for_log(self, read, marker):
+        deadline = time.monotonic() + 5
+        while time.monotonic() < deadline:
+            text = read()
+            if marker in text:
+                return text
+            time.sleep(0.01)
+        self.fail(f'log marker {marker!r} missing: {read()}')
+
+    def test_default_logs_and_access_statuses(self):
+        (self.content / 'broken.md').write_text('[bad](../../outside.md)')
+        server = self.start()
+        modified = server.request('/assets/sample.txt')[1]['last-modified']
+        cases = [('/assets/sam%70le.txt', 'GET', {'If-Modified-Since': modified}, 304), ('/', 'GET', None, 200), ('/time', 'GET', None, 301), ('/missing', 'GET', None, 404), ('/broken', 'GET', None, 500), ('/assets/sample.txt', 'GET', None, 200), ('/assets/sam%70le.txt', 'GET', {'Range': 'bytes=0-2'}, 206), ('/assets/miss%69ng', 'GET', None, 404), ('/assets/sam%70le.txt', 'HEAD', None, 200), ('/command/time', 'HEAD', None, 200), ('/%00', 'GET', None, 200)]
+        for index, (path, method, headers, expected) in enumerate(cases):
+            with self.subTest(path=path, method=method):
+                self.assertEqual(server.request(f'{path}?log_case={index}', method, headers)[0], expected)
+                text = self.wait_for_log(server.output, f'log_case={index} HTTP/1.1"')
+                lines = [line for line in text.splitlines() if f'log_case={index} HTTP/1.1"' in line]
+                self.assertEqual(len(lines), 1)
+                self.assertRegex(lines[0], rf'HTTP/1.1" {expected} [0-9]+ ')
+        self.assertIn('cannot read/render document: broken.md', server.diagnostics())
+        self.assertRegex(server.diagnostics(), r'\d{4}-\d{2}-\d{2}T.*Z stories: ')
+        self.assertNotIn('cannot read/render', server.output())
+        self.assertNotIn('HTTP/1.1"', server.diagnostics())
+        server.process.send_signal(signal.SIGUSR1)
+        self.wait_for_log(server.diagnostics, 'log files reopened')
+        self.assertEqual(server.request('/?after_default_reopen=1')[0], 200)
+        self.wait_for_log(server.output, 'after_default_reopen=1')
+
+    def test_log_files_append_and_cli_overrides(self):
+        access = self.root / 'access.log'
+        errors = self.root / 'error.log'
+        access.write_text('existing access\n')
+        errors.write_text('existing error\n')
+        (self.content / 'broken.md').write_text('[bad](../../outside.md)')
+        self.write_config(access_log='missing/config-access.log', error_log='missing/config-error.log')
+        server = Server(self.config, self.root, '--access-log', 'access.log', '--error-log', 'error.log')
+        self.servers.append(server)
+        self.assertEqual(server.request('/broken?file_log=1')[0], 500)
+        self.wait_for_log(access.read_text, 'file_log=1')
+        self.assertTrue(access.read_text().startswith('existing access\n'))
+        self.assertTrue(errors.read_text().startswith('existing error\n'))
+        self.assertIn('broken.md', errors.read_text())
+        self.assertNotIn('HTTP/1.1"', server.output())
+        self.assertEqual(server.diagnostics(), '')
+        self.assertFalse((self.root / 'missing').exists())
+
+    def test_ini_log_paths_are_relative_to_configuration(self):
+        server = self.start(access_log='access.log', error_log='error.log')
+        self.assertEqual(server.request('/?ini_log=1')[0], 200)
+        self.wait_for_log((self.root / 'access.log').read_text, 'ini_log=1')
+        server.close()
+        self.servers.remove(server)
+        # Run from another directory to distinguish INI and CLI path semantics.
+        server = Server(self.config, self.assets)
+        self.servers.append(server)
+        self.assertEqual(server.request('/?ini_log=2')[0], 200)
+        self.wait_for_log((self.root / 'access.log').read_text, 'ini_log=2')
+        self.assertFalse((self.assets / 'access.log').exists())
+
+    def test_independent_log_destinations(self):
+        (self.content / 'broken.md').write_text('[bad](../../outside.md)')
+        for setting in ['access_log', 'error_log']:
+            with self.subTest(setting=setting):
+                path = self.root / f'{setting}.log'
+                server = self.start(**{setting: str(path)})
+                self.assertEqual(server.request('/broken?independent=1')[0], 500)
+                if setting == 'access_log':
+                    self.wait_for_log(path.read_text, 'independent=1')
+                    self.assertIn('broken.md', server.diagnostics())
+                else:
+                    self.wait_for_log(server.output, 'independent=1')
+                    self.assertIn('broken.md', path.read_text())
+                server.stop()
+
+    def test_log_control_bytes_are_escaped(self):
+        server = self.start()
+        self.assertEqual(server.request('/invalid%0Apath?escaped_record=1')[0], 400)
+        text = self.wait_for_log(server.output, 'escaped_record=1')
+        line = next(line for line in text.splitlines() if 'escaped_record=1' in line)
+        self.assertIn('/invalid\\x0Apath', line)
+        self.assertNotIn('\n', line)
+
+    @unittest.skipUnless(pathlib.Path('/dev/full').exists(), '/dev/full is unavailable')
+    def test_log_write_failures_fall_back_to_stderr(self):
+        (self.content / 'broken.md').write_text('[bad](../../outside.md)')
+        server = self.start(access_log='/dev/full', error_log='/dev/full')
+        self.assertEqual(server.request('/broken?write_failure=1')[0], 500)
+        text = self.wait_for_log(server.diagnostics, 'write_failure=1')
+        self.assertIn('cannot write access log', text)
+        self.assertIn('cannot write error log', text)
+        self.assertIn('broken.md', text)
+        self.assertEqual(server.request('/')[0], 200)
+
+    def test_log_open_failure_and_check_config(self):
+        for setting in ['access_log', 'error_log']:
+            with self.subTest(setting=setting):
+                self.write_config(**{setting: 'missing/log'})
+                result = subprocess.run([str(BINARY), '--config', str(self.config)], capture_output=True, text=True, timeout=5)
+                self.assertNotEqual(result.returncode, 0)
+                self.assertIn('cannot open log', result.stderr)
+                self.assertNotIn('Listening on', result.stdout)
+        self.write_config(access_log='check-access.log', error_log='check-error.log')
+        result = subprocess.run([str(BINARY), '--config', str(self.config), '--check-config'], capture_output=True, text=True, timeout=5)
+        self.assertEqual(result.returncode, 0, result.stderr)
+        self.assertFalse((self.root / 'check-access.log').exists())
+        self.assertFalse((self.root / 'check-error.log').exists())
+        self.write_config(error_log='listener-error.log')
+        with contextlib.closing(socket.socket()) as occupied:
+            occupied.bind(('127.0.0.1', 0))
+            occupied.listen()
+            endpoint = f'127.0.0.1:{occupied.getsockname()[1]}'
+            result = subprocess.run([str(BINARY), '--config', str(self.config), '--listen', endpoint], capture_output=True, text=True, timeout=5)
+            self.assertNotEqual(result.returncode, 0)
+            self.assertIn('civetweb:', (self.root / 'listener-error.log').read_text())
+            self.assertIn('cannot start HTTP listener', (self.root / 'listener-error.log').read_text())
+            self.assertEqual(result.stderr, '')
+        self.write_config(error_log='startup-error.log')
+        self.template.write_text('{% invalid %}')
+        result = subprocess.run([str(BINARY), '--config', str(self.config)], capture_output=True, text=True, timeout=5)
+        self.assertNotEqual(result.returncode, 0)
+        self.assertIn('invalid Inja template', (self.root / 'startup-error.log').read_text())
+        self.assertEqual(result.stderr, '')
+
+    def test_log_reopen_during_traffic_and_failure(self):
+        access = self.root / 'access.log'
+        errors = self.root / 'error.log'
+        old_access = self.root / 'access.old'
+        old_errors = self.root / 'error.old'
+        server = self.start(access_log='access.log', error_log='error.log')
+        self.assertEqual(server.request('/?before_rotation=1')[0], 200)
+        self.wait_for_log(access.read_text, 'before_rotation=1')
+        access.rename(old_access)
+        errors.rename(old_errors)
+        with concurrent.futures.ThreadPoolExecutor(max_workers=4) as pool:
+            futures = [pool.submit(server.request, f'/assets/sam%70le.txt?traffic={index}') for index in range(80)]
+            server.process.send_signal(signal.SIGUSR1)
+            self.wait_for_log(lambda: errors.read_text() if errors.exists() else '', 'log files reopened')
+            self.assertTrue(all(future.result()[0] == 200 for future in futures))
+        self.assertEqual(server.request('/?after_rotation=1')[0], 200)
+        self.wait_for_log(access.read_text, 'after_rotation=1')
+        self.assertNotIn('after_rotation=1', old_access.read_text())
+        self.assertNotIn('before_rotation=1', access.read_text())
+        traffic = [line for line in (old_access.read_text() + access.read_text()).splitlines() if 'traffic=' in line]
+        self.assertEqual(len(traffic), 80)
+        self.assertEqual(len({re.search(r'traffic=(\d+)', line)[1] for line in traffic}), 80)
+        self.assertTrue(all(re.search(r'HTTP/1.1" 200 [0-9]+ ', line) for line in traffic))
+        # The second open fails: neither live destination may be replaced.
+        access.rename(self.root / 'access.second')
+        errors.rename(self.root / 'error.second')
+        errors.mkdir()
+        server.process.send_signal(signal.SIGUSR1)
+        self.wait_for_log((self.root / 'error.second').read_text, 'keeping existing logs')
+        self.assertEqual(server.request('/?failed_reopen=1')[0], 200)
+        self.wait_for_log((self.root / 'access.second').read_text, 'failed_reopen=1')
+        self.assertNotIn('failed_reopen=1', access.read_text())
+        self.assertEqual(server.process.poll(), None)
 
     def test_methods(self):
         server = self.start()
