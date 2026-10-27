@@ -392,6 +392,27 @@ class HttpTests(unittest.TestCase):
         self.assertEqual(server.diagnostics(), '')
         self.assertFalse((self.root / 'missing').exists())
 
+    def test_log_file_creation_permissions(self):
+        self.write_config(access_log='access.log', error_log='error.log')
+        self.template.write_text('{% invalid %}')
+        # Fail after logging opens, so no listener is needed. Set umask only in
+        # the child shell, without changing the test process or using preexec_fn.
+        command = ['sh', '-c', 'umask "$1"; shift; exec "$@"', 'stories-permissions', '000', str(BINARY), '--config', str(self.config)]
+        result = subprocess.run(command, capture_output=True, text=True, timeout=5)
+        self.assertNotEqual(result.returncode, 0)
+        access = self.root / 'access.log'
+        errors = self.root / 'error.log'
+        self.assertIn('invalid Inja template', errors.read_text())
+        self.assertEqual(access.stat().st_mode & 0o777, 0o644)
+        self.assertEqual(errors.stat().st_mode & 0o777, 0o644)
+        # Existing operator-managed permissions must survive opening for append.
+        access.chmod(0o640)
+        errors.chmod(0o640)
+        result = subprocess.run(command, capture_output=True, text=True, timeout=5)
+        self.assertNotEqual(result.returncode, 0)
+        self.assertEqual(access.stat().st_mode & 0o777, 0o640)
+        self.assertEqual(errors.stat().st_mode & 0o777, 0o640)
+
     def test_ini_log_paths_are_relative_to_configuration(self):
         server = self.start(access_log='access.log', error_log='error.log')
         self.assertEqual(server.request('/?ini_log=1')[0], 200)

@@ -12,7 +12,7 @@ static FILE *open_log(const char *path, FILE *fallback, char *error, size_t erro
 	if (!path)
 		return fallback;
 	/* Nonblocking open prevents a mistaken FIFO path from hanging startup. */
-	int fd = open(path, O_WRONLY | O_CREAT | O_APPEND | O_CLOEXEC | O_NONBLOCK, 0666);
+	int fd = open(path, O_WRONLY | O_CREAT | O_APPEND | O_CLOEXEC | O_NONBLOCK, 0644);
 	if (fd >= 0)
 	{
 		FILE *stream = fdopen(fd, "a");

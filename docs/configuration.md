@@ -52,7 +52,7 @@ access_log = /var/log/stories/access.log
 error_log = /var/log/stories/error.log
 ```
 
-Each destination is independent; omit a setting to retain its standard stream. File destinations are literal paths, opened in append mode and created if necessary with permissions governed by the process umask. Parent directories must already exist and be writable by the service account. An open failure stops startup and reports the error on stderr. Diagnostics before configuration and logging initialization also use stderr. Runtime write failures are reported to stderr without stopping request serving.
+Each destination is independent; omit a setting to retain its standard stream. File destinations are literal paths, opened in append mode and created if necessary with mode `0644` (owner read/write, group and others read), further restricted by the process umask. Existing file permissions are preserved. Parent directories must already exist and be writable by the service account. An open failure stops startup and reports the error on stderr. Diagnostics before configuration and logging initialization also use stderr. Runtime write failures are reported to stderr without stopping request serving.
 
 After external rotation, send SIGUSR1 to the Stories process to reopen both configured log paths. Stories keeps serving during reopening. If either open fails, both existing destinations remain active and the failure is reported to the existing error log. SIGUSR1 does not reload configuration. Restarting also opens the configured paths; Stories has no internal rotation or retention policy.
 
