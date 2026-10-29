@@ -2,13 +2,14 @@ extern "C"
 {
 #include "page_template.h"
 #include "document.h"
+#include "logging.h"
 }
 
 #include <cerrno>
-#include <cstdio>
 #include <cstring>
 #include <fcntl.h>
 #include <inja/inja.hpp>
+#include <new>
 #include <ostream>
 #include <streambuf>
 #include <string_view>
@@ -28,7 +29,7 @@ struct template_output : std::streambuf
 	std::streamsize xsputn(const char *text, std::streamsize size) override
 	{
 		if (destination && !buffer_append(destination, text, static_cast<size_t>(size)))
-			throw std::ios_base::failure("page output limit or allocation failed");
+			throw std::ios_base::failure("cannot write page output");
 		return size;
 	}
 
@@ -42,28 +43,35 @@ struct template_output : std::streambuf
 	}
 };
 
-static bool template_read(const struct configuration *configuration, struct buffer *source, char *error, size_t error_size)
+static bool template_read(const struct configuration *configuration, struct buffer *source, struct logging *logging)
 {
 	*source = {};
 	const char *path = configuration->template_path;
 	int         fd = open(path, O_RDONLY | O_CLOEXEC | O_NONBLOCK);
 	if (fd < 0)
 	{
-		snprintf(error, error_size, "%s: cannot open page template: %s", path, strerror(errno));
+		logging_error(logging, "%s: cannot open page template: %s", path, strerror(errno));
 		return false;
 	}
 	struct stat status;
-	bool        success = !fstat(fd, &status) && S_ISREG(status.st_mode);
-	if (!success)
-		snprintf(error, error_size, "%s: page template must be a regular file", path);
-	else if (!(success = document_read(fd, PAGE_TEMPLATE_LIMIT, source)))
-		snprintf(error, error_size, "%s: cannot read page template or exceeds 1 MiB", path);
+	bool        success = false;
+	if (fstat(fd, &status))
+		logging_error(logging, "%s: cannot stat page template: %s", path, strerror(errno));
+	else if (!S_ISREG(status.st_mode))
+		logging_error(logging, "%s: page template must be a regular file", path);
+	else
+		success = document_read(fd, path, PAGE_TEMPLATE_LIMIT, source, logging);
 	close(fd);
 	if (!success)
 		return false;
-	if (!source->size || memchr(source->data, '\0', source->size))
+	if (!source->size)
 	{
-		snprintf(error, error_size, "%s: page template must be nonempty and contain no NUL bytes", path);
+		logging_error(logging, "%s: page template must be nonempty", path);
+		return false;
+	}
+	if (memchr(source->data, '\0', source->size))
+	{
+		logging_error(logging, "%s: page template contains a NUL byte", path);
 		return false;
 	}
 	return true;
@@ -85,11 +93,11 @@ static inja::json template_data(const struct configuration *configuration, const
 	return {{"title", title}, {"site_title", configuration->title}, {"message", message ? message : ""}, {"error", message != nullptr}, {"navigation", std::move(links)}};
 }
 
-static bool template_expand(const struct configuration *configuration, const char *title, const struct buffer *content, const char *message, struct buffer *output, bool validating, char *error, size_t error_size)
+static bool template_expand(const struct configuration *configuration, const char *title, const struct buffer *content, const char *message, struct buffer *output, bool validating, struct logging *logging)
 {
 	struct buffer source = {};
 	bool          success = false;
-	if (!template_read(configuration, &source, error, error_size))
+	if (!template_read(configuration, &source, logging))
 		goto done;
 	try
 	{
@@ -123,16 +131,20 @@ static bool template_expand(const struct configuration *configuration, const cha
 			environment.render_to(stream, layout, data);
 		}
 		success = !output || !output->failed;
-		if (error_size)
-			error[0] = '\0';
+	}
+	catch (const std::bad_alloc &)
+	{
+		logging_error(logging, "%s: cannot allocate page template state", configuration->template_path);
 	}
 	catch (const std::exception &failure)
 	{
-		snprintf(error, error_size, "%s: invalid Inja template: %s", configuration->template_path, failure.what());
+		/* Buffer failures already reported their cause before the stream threw. */
+		if (!output || !output->failed)
+			logging_error(logging, "%s: invalid Inja template: %s", configuration->template_path, failure.what());
 	}
 	catch (...)
 	{
-		snprintf(error, error_size, "%s: page template expansion failed", configuration->template_path);
+		logging_error(logging, "%s: page template expansion threw an unknown exception", configuration->template_path);
 	}
 
 done:
@@ -143,13 +155,12 @@ done:
 	return success;
 }
 
-bool page_template_check(const struct configuration *configuration, char *error, size_t error_size)
+bool page_template_check(const struct configuration *configuration, struct logging *logging)
 {
-	return template_expand(configuration, nullptr, nullptr, nullptr, nullptr, true, error, error_size);
+	return template_expand(configuration, nullptr, nullptr, nullptr, nullptr, true, logging);
 }
 
 bool page_template_render(const struct configuration *configuration, const char *title, const struct buffer *content, const char *message, struct buffer *output)
 {
-	char error[512];
-	return template_expand(configuration, title, content, message, output, false, error, sizeof(error));
+	return template_expand(configuration, title, content, message, output, false, output->logging);
 }

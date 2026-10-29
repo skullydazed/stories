@@ -1,4 +1,5 @@
 #include "buffer.h"
+#include "logging.h"
 
 #include <stdint.h>
 #include <stdlib.h>
@@ -7,6 +8,11 @@
 void buffer_init(struct buffer *buffer, size_t limit)
 {
 	*buffer = (struct buffer){.limit = limit};
+}
+
+void buffer_init_logged(struct buffer *buffer, size_t limit, struct logging *logging, const char *context)
+{
+	*buffer = (struct buffer){.limit = limit, .logging = logging, .context = context};
 }
 
 void buffer_free(struct buffer *buffer)
@@ -21,9 +27,13 @@ bool buffer_append(struct buffer *buffer, const void *data, size_t size)
 	size_t capacity;
 	char  *allocation;
 
+	if (buffer->failed)
+		return false;
 	/* Check before addition: input sizes can originate at a parser boundary. */
-	if (buffer->failed || size > buffer->limit - buffer->size || size >= SIZE_MAX - buffer->size)
+	if (size > buffer->limit - buffer->size || size >= SIZE_MAX - buffer->size)
 	{
+		if (buffer->context)
+			logging_error(buffer->logging, "%s: buffer limit exceeded (limit %zu bytes, used %zu bytes, appending %zu bytes)", buffer->context, buffer->limit, buffer->size, size);
 		buffer->failed = true;
 		return false;
 	}
@@ -45,6 +55,8 @@ bool buffer_append(struct buffer *buffer, const void *data, size_t size)
 		allocation = realloc(buffer->data, capacity);
 		if (!allocation)
 		{
+			if (buffer->context)
+				logging_error(buffer->logging, "%s: cannot allocate %zu bytes for buffer", buffer->context, capacity);
 			buffer->failed = true;
 			return false;
 		}

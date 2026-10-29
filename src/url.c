@@ -1,5 +1,6 @@
 #include "url.h"
 #include "config.h"
+#include "logging.h"
 
 #include <ctype.h>
 #include <string.h>
@@ -119,6 +120,14 @@ static bool markdown_link_path(const char *path, size_t size)
 	return true;
 }
 
+static bool link_failure(const char *destination, size_t size, const char *source, struct buffer *output, const char *reason)
+{
+	/* Bound the preview so it leaves room for the rejection reason. Plain utility buffers remain silent, as they are for allocation failures. */
+	if (output->context)
+		logging_error(output->logging, "%s: invalid Markdown link \"%.*s%s\": %s", source, (int)(size > 512 ? 512 : size), destination, size > 512 ? "..." : "", reason);
+	return false;
+}
+
 bool url_rewrite_link(const char *destination, size_t size, const char *source, struct buffer *output)
 {
 	char   decoded[STORIES_PATH_LIMIT];
@@ -128,7 +137,7 @@ bool url_rewrite_link(const char *destination, size_t size, const char *source, 
 	size_t decoded_size = 0, joined_size = 0, normalized_size = 0, depth = 0;
 	size_t path_size = 0;
 	if (memchr(destination, '\0', size))
-		return false;
+		return link_failure(destination, size, source, output, "destination contains a NUL byte");
 	if (!size || destination[0] == '#' || destination[0] == '?' || external_url(destination, size))
 		return buffer_append(output, destination, size);
 	while (path_size < size && destination[path_size] != '?' && destination[path_size] != '#')
@@ -136,19 +145,23 @@ bool url_rewrite_link(const char *destination, size_t size, const char *source, 
 	if (!markdown_link_path(destination, path_size))
 		return buffer_append(output, destination, size);
 	if (path_size >= sizeof(decoded))
-		return false;
+		return link_failure(destination, size, source, output, "path exceeds the 4095-byte limit");
 	for (size_t i = 0; i < path_size; i++)
 	{
 		unsigned char c = (unsigned char)destination[i];
 		if (c == '%')
 		{
 			if (i + 2 >= path_size || hex_digit((unsigned char)destination[i + 1]) < 0 || hex_digit((unsigned char)destination[i + 2]) < 0)
-				return false;
+				return link_failure(destination, size, source, output, "malformed percent escape");
 			c = (unsigned char)(hex_digit((unsigned char)destination[i + 1]) * 16 + hex_digit((unsigned char)destination[i + 2]));
 			i += 2;
 		}
-		if (c < 32 || c == 127 || c == '\\')
-			return false;
+		if (!c)
+			return link_failure(destination, size, source, output, "decoded path contains a NUL byte");
+		if (c < 32 || c == 127)
+			return link_failure(destination, size, source, output, "decoded path contains a control byte");
+		if (c == '\\')
+			return link_failure(destination, size, source, output, "decoded path contains a backslash");
 		decoded[decoded_size++] = (char)c;
 	}
 	decoded[decoded_size] = '\0';
@@ -157,11 +170,11 @@ bool url_rewrite_link(const char *destination, size_t size, const char *source, 
 		const char *slash = strrchr(source, '/');
 		joined_size = slash ? (size_t)(slash - source) + 1 : 0;
 		if (joined_size >= sizeof(joined))
-			return false;
+			return link_failure(destination, size, source, output, "source directory exceeds the 4095-byte limit");
 		memcpy(joined, source, joined_size);
 	}
 	if (decoded_size >= sizeof(joined) - joined_size)
-		return false;
+		return link_failure(destination, size, source, output, "resolved path exceeds the 4095-byte limit");
 	memcpy(joined + joined_size, decoded, decoded_size + 1);
 	joined_size += decoded_size;
 	for (size_t i = 0; i < joined_size;)
@@ -177,12 +190,12 @@ bool url_rewrite_link(const char *destination, size_t size, const char *source, 
 		if (length == 2 && !memcmp(joined + start, "..", 2))
 		{
 			if (!depth)
-				return false;
+				return link_failure(destination, size, source, output, "path escapes the content root");
 			normalized_size = offsets[--depth];
 			continue;
 		}
 		if (depth == sizeof(offsets) / sizeof(offsets[0]))
-			return false;
+			return link_failure(destination, size, source, output, "too many path components");
 		offsets[depth++] = normalized_size;
 		if (normalized_size)
 			normalized[normalized_size++] = '/';
@@ -190,5 +203,11 @@ bool url_rewrite_link(const char *destination, size_t size, const char *source, 
 		normalized_size += length;
 	}
 	normalized[normalized_size] = '\0';
-	return document_location(normalized, normalized_size, output) && buffer_append(output, destination + path_size, size - path_size);
+	if (!document_location(normalized, normalized_size, output))
+	{
+		if (!output->failed)
+			return link_failure(destination, size, source, output, "filename retains an extension after removing .md");
+		return false;
+	}
+	return buffer_append(output, destination + path_size, size - path_size);
 }

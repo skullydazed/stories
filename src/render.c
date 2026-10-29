@@ -1,5 +1,6 @@
 #include "render.h"
 #include "entities.h"
+#include "logging.h"
 #include "page_template.h"
 #include "url.h"
 
@@ -79,9 +80,11 @@ static bool attribute_decode(const MD_ATTRIBUTE *attribute, struct buffer *outpu
 
 static bool attribute_render(struct renderer *renderer, const MD_ATTRIBUTE *attribute, bool rewrite)
 {
+	if (renderer->output->failed)
+		return false;
 	struct buffer decoded, destination;
-	buffer_init(&decoded, renderer->output->limit);
-	buffer_init(&destination, renderer->output->limit);
+	buffer_init_logged(&decoded, renderer->output->limit, renderer->output->logging, renderer->source);
+	buffer_init_logged(&destination, renderer->output->limit, renderer->output->logging, renderer->source);
 	bool success = attribute_decode(attribute, &decoded);
 	if (success && rewrite)
 		success = url_rewrite_link(decoded.data ? decoded.data : "", decoded.size, renderer->source, &destination);
@@ -102,7 +105,10 @@ static int block_enter(MD_BLOCKTYPE type, void *detail, void *userdata)
 	struct buffer   *output = renderer->output;
 	char             number[64];
 	if ((unsigned)type > MD_BLOCK_TD)
+	{
+		logging_error(output->logging, "%s: unsupported Markdown block type %u", renderer->source, (unsigned)type);
 		return renderer_result(renderer, false);
+	}
 	if (block_tags[type].open)
 		return renderer_result(renderer, buffer_puts(output, block_tags[type].open));
 	switch (type)
@@ -165,6 +171,7 @@ static int block_enter(MD_BLOCKTYPE type, void *detail, void *userdata)
 		break;
 	}
 	default:
+		logging_error(output->logging, "%s: unsupported Markdown block type %u", renderer->source, (unsigned)type);
 		return renderer_result(renderer, false);
 	}
 	return renderer_result(renderer, !output->failed);
@@ -174,7 +181,10 @@ static int block_leave(MD_BLOCKTYPE type, void *detail, void *userdata)
 {
 	struct renderer *renderer = userdata;
 	if ((unsigned)type > MD_BLOCK_TD)
+	{
+		logging_error(renderer->output->logging, "%s: unsupported Markdown block type %u", renderer->source, (unsigned)type);
 		return renderer_result(renderer, false);
+	}
 	if (type == MD_BLOCK_H)
 	{
 		renderer->collect_title = false;
@@ -229,6 +239,7 @@ static int span_enter(MD_SPANTYPE type, void *detail, void *userdata)
 		return renderer_result(renderer, buffer_puts(renderer->output, "\" alt=\""));
 	}
 	default:
+		logging_error(renderer->output->logging, "%s: unsupported Markdown span type %u", renderer->source, (unsigned)type);
 		return renderer_result(renderer, false);
 	}
 }
@@ -266,6 +277,7 @@ static int span_leave(MD_SPANTYPE type, void *detail, void *userdata)
 		return renderer_result(renderer, buffer_puts(renderer->output, ">"));
 	}
 	default:
+		logging_error(renderer->output->logging, "%s: unsupported Markdown span type %u", renderer->source, (unsigned)type);
 		return renderer_result(renderer, false);
 	}
 }
@@ -306,7 +318,7 @@ static int text_render(MD_TEXTTYPE type, const MD_CHAR *text, MD_SIZE size, void
 	if (type == MD_TEXT_ENTITY)
 	{
 		struct buffer decoded;
-		buffer_init(&decoded, renderer->output->limit);
+		buffer_init_logged(&decoded, renderer->output->limit, renderer->output->logging, renderer->source);
 		bool success = entity_decode(text, size, &decoded) && buffer_html(renderer->output, decoded.data ? decoded.data : "", decoded.size);
 		buffer_free(&decoded);
 		return renderer_result(renderer, success);
@@ -314,13 +326,16 @@ static int text_render(MD_TEXTTYPE type, const MD_CHAR *text, MD_SIZE size, void
 	return renderer_result(renderer, buffer_html(renderer->output, text, size));
 }
 
-bool render_document(const struct configuration *configuration, const char *source, const char *markdown, size_t size, struct buffer *output)
+bool render_document(const struct configuration *configuration, const char *source, const char *markdown, size_t size, struct buffer *output, struct logging *logging)
 {
-	buffer_init(output, configuration->output_limit);
+	buffer_init_logged(output, configuration->output_limit, logging, source);
 	if (size > UINT_MAX)
+	{
+		logging_error(logging, "%s: Markdown size %zu bytes exceeds parser limit %u bytes", source, size, UINT_MAX);
 		return false;
+	}
 	struct renderer renderer = {.output = output, .source = source};
-	buffer_init(&renderer.title, configuration->output_limit);
+	buffer_init_logged(&renderer.title, configuration->output_limit, logging, source);
 	const MD_PARSER parser = {
 		.abi_version = 0,
 		.flags = MD_FLAG_TABLES | MD_FLAG_STRIKETHROUGH | MD_FLAG_TASKLISTS | MD_FLAG_PERMISSIVEAUTOLINKS,
@@ -330,8 +345,11 @@ bool render_document(const struct configuration *configuration, const char *sour
 		.leave_span = span_leave,
 		.text = text_render,
 	};
-	if (md_parse(markdown, (MD_SIZE)size, &parser, &renderer) || output->failed)
+	int parsed = md_parse(markdown, (MD_SIZE)size, &parser, &renderer);
+	if (parsed || output->failed)
 	{
+		if (!output->failed)
+			logging_error(logging, "%s: Markdown parser failed (status %d)", source, parsed);
 		buffer_free(&renderer.title);
 		output->failed = true;
 		return false;
@@ -360,7 +378,7 @@ bool render_document(const struct configuration *configuration, const char *sour
 	/* Render once, then assemble the shell after the first heading is known.
 	 * The complete page, including its title and shell, shares one output limit. */
 	struct buffer page;
-	buffer_init(&page, configuration->output_limit);
+	buffer_init_logged(&page, configuration->output_limit, logging, source);
 	bool success = !renderer.title.failed && page_template_render(configuration, renderer.title.data ? renderer.title.data : "", output, NULL, &page);
 	buffer_free(&renderer.title);
 	buffer_free(output);
@@ -370,10 +388,10 @@ bool render_document(const struct configuration *configuration, const char *sour
 	return success;
 }
 
-bool render_error(const struct configuration *configuration, const char *title, const char *message, struct buffer *output)
+bool render_error(const struct configuration *configuration, const char *title, const char *message, struct buffer *output, struct logging *logging)
 {
 	/* Error pages have a separate small budget so an output-limit failure can
 	 * still produce a complete error response instead of recursively failing. */
-	buffer_init(output, 256u * 1024u);
+	buffer_init_logged(output, 256u * 1024u, logging, title);
 	return page_template_render(configuration, title, NULL, message, output);
 }

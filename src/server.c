@@ -91,9 +91,8 @@ static int send_response(struct mg_connection *connection, int status, const cha
 static int send_error(struct mg_connection *connection, const struct server *server, int status, const char *title, const char *message)
 {
 	struct buffer body;
-	if (!render_error(server->configuration, title, message, &body))
+	if (!render_error(server->configuration, title, message, &body, server->logging))
 	{
-		logging_error(server->logging, "cannot render error page for status %d", status);
 		buffer_free(&body);
 		buffer_init(&body, 64);
 		buffer_puts(&body, "Request failed.\n");
@@ -134,7 +133,7 @@ static int request_begin(struct mg_connection *connection)
 		return send_error(connection, server, 404, "Not Found", "No document exists at this URL.");
 
 	struct document_route route;
-	document_resolve(server->content_fd, configuration, path, path_size, &route);
+	document_resolve(server->content_fd, configuration, path, path_size, &route, server->logging);
 	int result;
 	if (route.status == ROUTE_REDIRECT)
 	{
@@ -159,12 +158,11 @@ static int request_begin(struct mg_connection *connection)
 	else if (route.status == ROUTE_DOCUMENT)
 	{
 		struct buffer markdown, html = {0};
-		bool          rendered = document_read(route.fd, configuration->markdown_limit, &markdown) && render_document(configuration, route.source, markdown.data, markdown.size, &html);
+		bool          rendered = document_read(route.fd, route.source, configuration->markdown_limit, &markdown, server->logging) && render_document(configuration, route.source, markdown.data, markdown.size, &html, server->logging);
 		buffer_free(&markdown);
 		if (!rendered)
 		{
 			buffer_free(&html);
-			logging_error(server->logging, "cannot read/render document: %s (I/O error, invalid link/template, or configured limit)", route.source);
 			result = send_error(connection, server, 500, "Internal Server Error", "The document could not be rendered.");
 		}
 		else
@@ -174,10 +172,7 @@ static int request_begin(struct mg_connection *connection)
 	else if (route.status == ROUTE_INVALID)
 		result = send_error(connection, server, 400, "Bad Request", "Invalid document path.");
 	else if (route.status == ROUTE_FAILURE)
-	{
-		logging_error(server->logging, "cannot resolve document: %s", path);
 		result = send_error(connection, server, 500, "Internal Server Error", "The document could not be opened.");
-	}
 	else
 		result = send_error(connection, server, 404, "Not Found", "No document exists at this URL.");
 	document_route_free(&route);

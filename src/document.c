@@ -1,4 +1,5 @@
 #include "document.h"
+#include "logging.h"
 #include "url.h"
 
 #include <errno.h>
@@ -16,7 +17,7 @@ static bool missing_error(int error)
 
 /* Walk each component with O_NOFOLLOW. Resolving a string with realpath and
  * opening it later would allow a rename/symlink race between those operations. */
-static int open_document(int root_fd, const char *path, size_t length)
+static int open_document(int root_fd, const char *path, size_t length, struct logging *logging)
 {
 	char copy[STORIES_PATH_LIMIT];
 	if (length >= sizeof(copy))
@@ -28,7 +29,10 @@ static int open_document(int root_fd, const char *path, size_t length)
 	/* Set close-on-exec atomically, without a dup/fcntl window between workers. */
 	int parent = fcntl(root_fd, F_DUPFD_CLOEXEC, 0);
 	if (parent < 0)
+	{
+		logging_error(logging, "%s: cannot duplicate content root descriptor: %s", path, strerror(errno));
 		return -1;
+	}
 	char *component = copy;
 	for (;;)
 	{
@@ -49,11 +53,23 @@ static int open_document(int root_fd, const char *path, size_t length)
 		close(parent);
 		errno = saved_errno;
 		if (fd < 0)
+		{
+			if (!missing_error(errno) && errno != ENAMETOOLONG)
+				logging_error(logging, "%s: cannot open document component \"%s\": %s", path, component, strerror(errno));
 			return -1;
+		}
 		if (!slash)
 		{
 			struct stat status;
-			if (fstat(fd, &status) || !S_ISREG(status.st_mode))
+			if (fstat(fd, &status))
+			{
+				int error = errno;
+				logging_error(logging, "%s: cannot stat document: %s", path, strerror(error));
+				close(fd);
+				errno = error;
+				return -1;
+			}
+			if (!S_ISREG(status.st_mode))
 			{
 				close(fd);
 				errno = ENOENT;
@@ -66,12 +82,12 @@ static int open_document(int root_fd, const char *path, size_t length)
 	}
 }
 
-static bool try_document(int root_fd, const char *source, bool redirect, struct document_route *route)
+static bool try_document(int root_fd, const char *source, bool redirect, struct document_route *route, struct logging *logging)
 {
 	size_t length = strlen(source);
 	if (length >= sizeof(route->source))
 		return false;
-	int fd = open_document(root_fd, source, length);
+	int fd = open_document(root_fd, source, length, logging);
 	if (fd < 0)
 	{
 		if (!missing_error(errno) && errno != ENAMETOOLONG)
@@ -89,12 +105,12 @@ static bool try_document(int root_fd, const char *source, bool redirect, struct 
 	return true;
 }
 
-void document_resolve(int root_fd, const struct configuration *configuration, const char *path, size_t size, struct document_route *route)
+void document_resolve(int root_fd, const struct configuration *configuration, const char *path, size_t size, struct document_route *route, struct logging *logging)
 {
 	char relative[STORIES_PATH_LIMIT];
 	char candidate[STORIES_PATH_LIMIT];
 	*route = (struct document_route){.status = ROUTE_MISSING, .fd = -1};
-	buffer_init(&route->location, STORIES_PATH_LIMIT * 3);
+	buffer_init_logged(&route->location, STORIES_PATH_LIMIT * 3, logging, route->source);
 	if (!url_path_valid(path, size))
 	{
 		route->status = ROUTE_INVALID;
@@ -109,10 +125,10 @@ void document_resolve(int root_fd, const struct configuration *configuration, co
 	if (length < 0 || length >= (int)sizeof(candidate))
 		return;
 	bool index = !directory && (!strcmp(relative, "index") || (strlen(relative) >= 6 && !strcmp(relative + strlen(relative) - 6, "/index")));
-	if (try_document(root_fd, candidate, index, route) || route->status == ROUTE_FAILURE || directory)
+	if (try_document(root_fd, candidate, index, route, logging) || route->status == ROUTE_FAILURE || directory)
 		return;
 	length = snprintf(candidate, sizeof(candidate), "%s/index.md", relative);
-	if (length >= 0 && length < (int)sizeof(candidate) && try_document(root_fd, candidate, true, route))
+	if (length >= 0 && length < (int)sizeof(candidate) && try_document(root_fd, candidate, true, route, logging))
 		return;
 	if (route->status == ROUTE_FAILURE || strchr(relative, '/'))
 		return;
@@ -137,13 +153,13 @@ void document_resolve(int root_fd, const struct configuration *configuration, co
 		relative[name_length - qualified_length - 1] = '\0';
 		length = snprintf(candidate, sizeof(candidate), "%s/%s.md", qualified, relative);
 		if (length >= 0 && length < (int)sizeof(candidate))
-			try_document(root_fd, candidate, true, route);
+			try_document(root_fd, candidate, true, route, logging);
 		return;
 	}
 	for (size_t i = 0; i < configuration->directory_count; i++)
 	{
 		length = snprintf(candidate, sizeof(candidate), "%s/%s.md", configuration->directories[i], relative);
-		if (length >= 0 && length < (int)sizeof(candidate) && try_document(root_fd, candidate, true, route))
+		if (length >= 0 && length < (int)sizeof(candidate) && try_document(root_fd, candidate, true, route, logging))
 			return;
 		if (route->status == ROUTE_FAILURE)
 			return;
@@ -158,12 +174,25 @@ void document_route_free(struct document_route *route)
 	*route = (struct document_route){.fd = -1};
 }
 
-bool document_read(int fd, size_t limit, struct buffer *output)
+bool document_read(int fd, const char *source, size_t limit, struct buffer *output, struct logging *logging)
 {
 	struct stat status;
-	buffer_init(output, limit);
-	if (fstat(fd, &status) || status.st_size < 0 || (unsigned long long)status.st_size > limit)
+	buffer_init_logged(output, limit, logging, source);
+	if (fstat(fd, &status))
+	{
+		logging_error(logging, "%s: cannot stat document: %s", source, strerror(errno));
 		return false;
+	}
+	if (status.st_size < 0)
+	{
+		logging_error(logging, "%s: invalid negative file size", source);
+		return false;
+	}
+	if ((unsigned long long)status.st_size > limit)
+	{
+		logging_error(logging, "%s: source size %llu bytes exceeds read limit %zu bytes", source, (unsigned long long)status.st_size, limit);
+		return false;
+	}
 	char block[16384];
 	for (;;)
 	{
@@ -171,7 +200,10 @@ bool document_read(int fd, size_t limit, struct buffer *output)
 		if (count < 0 && errno == EINTR)
 			continue;
 		if (count < 0)
+		{
+			logging_error(logging, "%s: cannot read document: %s", source, strerror(errno));
 			return false;
+		}
 		if (!count)
 			return buffer_append(output, "", 0);
 		/* Bound the actual read too: a publisher may grow the file after fstat. */

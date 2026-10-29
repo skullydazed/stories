@@ -66,7 +66,7 @@ Treat external and parser-supplied data as byte spans until the relevant contrac
 
 Use `size_t` for byte counts and allocation sizes, and preserve signed system-call results until errors have been checked. Check arithmetic before adding or multiplying sizes. Check bounds before copying, and check allocation and I/O results. Preserve `errno` when cleanup would otherwise hide the error being reported.
 
-Distinguish expected outcomes such as a missing document from malformed input, resource exhaustion, and internal failures. Use typed outcomes when callers need to distinguish those cases. Return failure through the subsystem interface and let the responsible boundary choose the diagnostic or HTTP response.
+Distinguish expected outcomes such as a missing document from malformed input, resource exhaustion, and internal failures. Use typed outcomes when callers need to distinguish those cases. Log failures where their cause and relevant context are known, using the shared logger and naming the file, rejected value, system error, or limit involved. Return failure through the subsystem interface so the caller can choose the HTTP response; avoid redundant catchall diagnostics at each caller.
 
 Use the shared bounded buffers and escaping helpers. Propagate failures and discard incomplete output. A failed render must not become a partial successful HTTP response. Keep filesystem lookup and use tied to the same validated descriptor where that is part of the subsystem's safety contract.
 

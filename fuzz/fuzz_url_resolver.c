@@ -37,7 +37,7 @@ int LLVMFuzzerTestOneInput(const uint8_t *data, size_t size)
 	configuration.directories[1] = command;
 	configuration.directories[2] = function;
 	struct document_route route;
-	document_resolve(root_fd, &configuration, (const char *)data, size, &route);
+	document_resolve(root_fd, &configuration, (const char *)data, size, &route, NULL);
 	if (route.status == ROUTE_DOCUMENT || route.status == ROUTE_REDIRECT)
 	{
 		assert(route.fd >= 0);
@@ -47,7 +47,7 @@ int LLVMFuzzerTestOneInput(const uint8_t *data, size_t size)
 		assert(!url_markdown_extension(route.location.data, route.location.size));
 		/* Fixture names need no escaping, so canonical locations resolve directly. */
 		struct document_route canonical;
-		document_resolve(root_fd, &configuration, route.location.data, route.location.size, &canonical);
+		document_resolve(root_fd, &configuration, route.location.data, route.location.size, &canonical, NULL);
 		assert(canonical.status == ROUTE_DOCUMENT);
 		assert(!strcmp(route.source, canonical.source));
 		document_route_free(&canonical);
