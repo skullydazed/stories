@@ -116,7 +116,7 @@ void document_resolve(int root_fd, const struct configuration *configuration, co
 		route->status = ROUTE_INVALID;
 		return;
 	}
-	if (url_path_has_extension(path, size))
+	if (url_markdown_extension(path, size))
 		return;
 	memcpy(relative, path + 1, size - 1);
 	relative[size - 1] = '\0';

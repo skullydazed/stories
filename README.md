@@ -1,6 +1,6 @@
 # Stories
 
-Stories is a compact, file-backed documentation server written in C11 with a small C++17 adapter for Inja templates. It renders Markdown on demand, gives documents extensionless URLs, supports ordered lookup of legacy names, and delegates public static assets to CivetWeb. Navigation and index pages are ordinary authored content.
+Stories is a compact, file-backed documentation server written in C11 with a small C++17 adapter for Inja templates. It renders Markdown on demand, gives documents URLs without their final `.md` extension, supports ordered lookup of legacy names, and delegates public static assets to CivetWeb. Navigation and index pages are ordinary authored content.
 
 Stories serves HTTP behind a reverse proxy such as nginx for TLS and caching. FreeBSD is the primary deployment platform, macOS the development platform, and Linux the CI environment.
 

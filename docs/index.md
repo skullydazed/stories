@@ -1,6 +1,6 @@
 # Stories
 
-Stories serves a directory of Markdown documents as a website. It renders pages on request, gives documents extensionless URLs, and delegates CSS, images, and other public assets to CivetWeb. Navigation and index pages are authored Markdown, so the published site stays under your control.
+Stories serves a directory of Markdown documents as a website. It renders pages on request, gives documents URLs without their final `.md` extension, and delegates CSS, images, and other public assets to CivetWeb. Navigation and index pages are authored Markdown, so the published site stays under your control.
 
 Stories is written in C11 using CivetWeb and MD4C. It runs in the foreground behind a reverse proxy that handles TLS and caching. FreeBSD is the primary deployment platform; macOS and Linux are also supported.
 

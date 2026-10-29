@@ -10,10 +10,11 @@ The content root is a tree of trusted Markdown documents. It is independent of t
 | `install.md` | `/install` |
 | `reference/index.md` | `/reference/` |
 | `reference/configuration.md` | `/reference/configuration` |
+| `scripts/2.8script.md` | `/scripts/2.8script` |
 
 An existing directory index gives `/reference` and `/reference/index` a 301 redirect to `/reference/`. `/index` redirects to `/`. A directory without `index.md` returns 404. Stories does not generate directory listings, indexes, search results, or navigation trees.
 
-Document URLs must be extensionless. A dot in the final path component is rejected even if a backing file such as `install.html.md` exists. This also applies to directory index URLs. Requests ending in `.md` or `.MD` return 404, including beneath `/assets/`.
+Document URLs omit the final `.md` source extension. Other dots in filenames and directory names are preserved, so `install.html.md` is served at `/install.html`. A final path component ending in `.md` (case-insensitive), including before a trailing slash, is reserved and returns 404, including beneath `/assets/`.
 
 Author index pages with links to their child documents. Keep public names stable when editing or reorganizing content; external bookmarks use those URLs.
 
@@ -28,7 +29,7 @@ Write local Markdown links relative to the source document:
 
 From `reference/configuration.md`, `../install.md` becomes `/install`, and `index.md` becomes `/reference/`. Rewriting retains query strings and fragments. A destination does not have to exist when rendered, so a valid link can still lead to a 404.
 
-Local `.md` links, including percent-encoded `.md` suffixes, are normalized against the source path. A malformed Markdown destination, a root escape, or a name that cannot form an extensionless document URL fails the whole render with 500. No partial successful document is sent.
+Local `.md` links, including percent-encoded `.md` suffixes, are normalized against the source path. A malformed Markdown destination, a root escape, or a name whose public URL retains the reserved Markdown suffix fails the whole render with 500. No partial successful document is sent.
 
 External URLs, fragment-only links, non-Markdown links, image destinations, and embedded HTML remain as authored. For example, extensionless `deals%` is passed through; a malformed escape in a `.md` destination is rejected. A link passing through does not make its destination a supported route.
 
