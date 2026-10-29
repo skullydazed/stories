@@ -1,1 +1,283 @@
-/* Site customization loads after Pico CSS, the light/dark switch styles, and theme.css. Add site-specific styles here independently of the selected theme. */
+/* EPIC site layout, using the light and dark colors supplied by theme.css. */
+body > header.epic-header,
+.epic-breadcrumbs,
+.epic-layout
+{
+	width: calc(100% - 80px);
+	max-width: calc(75rem - 80px);
+}
+
+body > header.epic-header
+{
+	display: flex;
+	align-items: flex-start;
+	justify-content: space-between;
+	gap: 1.5rem;
+	padding: 2rem 0 1.5rem;
+	margin-bottom: 0;
+	border-bottom: 1px solid var(--stories-border);
+}
+
+.epic-brand
+{
+	display: flex;
+	align-items: flex-start;
+	gap: 0.75rem;
+	color: var(--stories-heading);
+	text-decoration: none;
+}
+
+.epic-brand:hover,
+.epic-brand:focus-visible
+{
+	color: var(--stories-heading);
+	text-decoration: none;
+}
+
+.epic-brand img
+{
+	width: 320px;
+	height: 160px;
+	max-width: none;
+	object-fit: cover;
+}
+
+.epic-brand-label
+{
+	display: block;
+	padding-top: 10px;
+	font-size: 1.5rem;
+	line-height: 1.2;
+}
+
+.epic-brand-label > span
+{
+	display: block;
+}
+
+.epic-name
+{
+	font-size: 2.286rem;
+}
+
+.epic-tools
+{
+	flex-shrink: 0;
+	font-size: 0.875rem;
+}
+
+.epic-tools ul
+{
+	flex-wrap: wrap;
+	justify-content: flex-end;
+}
+
+.epic-breadcrumbs
+{
+	margin-bottom: 2.5rem;
+	border-bottom: 1px solid var(--stories-border);
+	font-size: 0.875rem;
+}
+
+.epic-breadcrumbs ol
+{
+	flex-wrap: wrap;
+	gap: 0.35em;
+	margin: 0;
+	padding: 0.1em 0.35em;
+}
+
+.epic-breadcrumbs li
+{
+	padding: 0;
+}
+
+.epic-breadcrumbs a
+{
+	margin: 0;
+	padding: 0;
+}
+
+.epic-breadcrumbs li + li::before
+{
+	content: "›";
+	margin-right: 0.35em;
+	color: var(--stories-muted);
+}
+
+.epic-layout
+{
+	display: grid;
+	grid-template-columns: 16rem minmax(0, 1fr);
+	align-items: start;
+	padding: 0;
+	margin-bottom: 2rem;
+}
+
+.epic-sidebar
+{
+	padding-right: 1.5rem;
+	font-size: 0.875rem;
+	overflow-wrap: anywhere;
+}
+
+.epic-sidebar nav
+{
+	display: block;
+}
+
+.epic-sidebar h2
+{
+	margin-bottom: 0.444em;
+	font-size: 1.125em;
+}
+
+.epic-sidebar section,
+.epic-sidebar ul
+{
+	margin: 0 0 0.7em;
+}
+
+.epic-sidebar nav ul
+{
+	display: block;
+	padding-left: 2em;
+	margin-left: 0;
+	margin-right: 0;
+}
+
+.epic-sidebar li
+{
+	display: list-item;
+	padding: 0;
+	list-style: square;
+}
+
+.epic-sidebar li::marker
+{
+	color: var(--stories-muted);
+}
+
+.epic-sidebar a
+{
+	display: inline;
+	padding: 0;
+	margin: 0;
+}
+
+.epic-content
+{
+	min-width: 0;
+	padding: 1.556rem 2rem 2rem;
+	border: 1px solid var(--stories-page-border);
+	border-radius: var(--pico-border-radius);
+	background: var(--stories-page);
+	box-shadow: var(--pico-box-shadow);
+	overflow-wrap: anywhere;
+}
+
+.epic-content h1
+{
+	margin-bottom: 0.444em;
+}
+
+.epic-content h2
+{
+	margin-bottom: 0.666em;
+}
+
+.epic-content h3
+{
+	margin-bottom: 0.888em;
+}
+
+.epic-content > :last-child
+{
+	margin-bottom: 0;
+}
+
+.skip-link
+{
+	position: absolute;
+	left: 1rem;
+	top: 0;
+	transform: translateY(-100%);
+	padding: 0.5rem 1rem;
+	background: var(--stories-page);
+	z-index: 1;
+}
+
+.skip-link:focus
+{
+	transform: translateY(0);
+}
+
+@media (max-width: 800px)
+{
+	body > header.epic-header,
+	.epic-breadcrumbs,
+	.epic-layout
+	{
+		width: calc(100% - 2rem);
+	}
+
+	body > header.epic-header
+	{
+		flex-wrap: wrap;
+		gap: 1rem;
+		padding: 1rem 0;
+	}
+
+	.epic-brand img
+	{
+		width: min(320px, 46vw);
+		height: min(160px, 23vw);
+	}
+
+	.epic-breadcrumbs
+	{
+		margin-bottom: 1.5rem;
+	}
+
+	.epic-layout
+	{
+		grid-template-columns: minmax(0, 1fr);
+		gap: 1.5rem;
+	}
+
+	.epic-sidebar
+	{
+		padding-right: 0;
+	}
+
+	.epic-sidebar nav
+	{
+		display: grid;
+		grid-template-columns: repeat(2, minmax(0, 1fr));
+		gap: 1rem;
+	}
+
+	.epic-content
+	{
+		padding: 1rem;
+	}
+}
+
+@media (max-width: 480px)
+{
+	.epic-brand
+	{
+		gap: 0.5rem;
+	}
+
+	.epic-brand-label
+	{
+		padding-top: 0;
+		font-size: 1rem;
+	}
+
+	.epic-name
+	{
+		font-size: 1.5rem;
+	}
+}

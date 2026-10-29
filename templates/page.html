@@ -11,11 +11,19 @@
 	<link rel="stylesheet" href="/assets/site.css">
 </head>
 <body>
-	<header class="container">
-		<nav>
-			<ul>
-				<li><a href="/"><strong>{{site_title}}</strong></a></li>
-			</ul>
+	<a class="skip-link" href="#content">Skip to content</a>
+	<header class="container epic-header">
+		<a class="epic-brand" href="/" aria-label="{{site_title}}">
+			<img src="/assets/logo.png" width="1152" height="896" alt="">
+			<span class="epic-brand-label">
+				<span class="epic-name">EPIC</span>
+				<span><b>E</b>nhanced</span>
+				<span><b>P</b>rogrammable</span>
+				<span><b>I</b>RC-II</span>
+				<span><b>C</b>lient</span>
+			</span>
+		</a>
+		<nav class="epic-tools" aria-label="Site navigation">
 			<ul>
 				{% for link in navigation %}
 				<li><a href="{{link.url}}">{{link.label}}</a></li>
@@ -29,13 +37,52 @@
 			</ul>
 		</nav>
 	</header>
-	<main class="container">
-		{% if error %}
-		<h1>{{title}}</h1>
-		<p>{{message}}</p>
-		{% else %}
+	<nav class="container epic-breadcrumbs" aria-label="Breadcrumb">
+		<ol>
+			<li><a href="/">Home</a></li>
+			<li aria-current="page">{{title}}</li>
+		</ol>
+	</nav>
+	<div class="container epic-layout">
+		<aside class="epic-sidebar">
+			<nav aria-label="EPIC documentation">
+				<section>
+					<h2>Learn about EPIC</h2>
+					<ul>
+						<li><a href="/getting_epic">Getting EPIC</a></li>
+						<li><a href="/installing">Installing EPIC</a></li>
+					</ul>
+				</section>
+				<section>
+					<h2>Using EPIC</h2>
+					<ul>
+						<li><a href="/scripts">EPIC Scripts</a></li>
+						<li><a href="/epic_scripting">Intro to Scripting</a></li>
+						<li><a href="/help_root">EPIC6 documentation</a></li>
+					</ul>
+				</section>
+				<section>
+					<h2>EPIC News</h2>
+					<ul>
+						<li><a href="/epic_news">News about EPIC</a></li>
+					</ul>
+				</section>
+				<section>
+					<h2>About EPIC</h2>
+					<ul>
+						<li><a href="/copyright">Copyright info</a></li>
+					</ul>
+				</section>
+			</nav>
+		</aside>
+		<main id="content" class="epic-content">
+			{% if error %}
+			<h1>{{title}}</h1>
+			<p>{{message}}</p>
+			{% else %}
 {{content()}}
-		{% endif %}
-	</main>
+			{% endif %}
+		</main>
+	</div>
 </body>
 </html>

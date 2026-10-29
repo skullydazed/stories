@@ -1,8 +1,8 @@
 # Static assets
 
-The example configuration uses this directory as `[assets] root`. If you configure another asset root, copy `pico.min.css`, `dark_toggle.css`, `theme.css`, `site.css`, and `dark_toggle.js` there. The server serves only the configured root and does not search fallback locations.
+The example configuration uses this directory as `[assets] root`. If you configure another asset root, copy `pico.min.css`, `dark_toggle.css`, `theme.css`, `site.css`, `dark_toggle.js`, and `logo.png` there. The server serves only the configured root and does not search fallback locations. The EPIC page layout uses `logo.png` for its anniversary banner and `site.css` for its header, sidebar, and content panel.
 
-The editable `templates/page.html`, selected by `[site] template`, loads `/assets/pico.min.css`, `/assets/dark_toggle.css`, `/assets/theme.css`, and `/assets/site.css`, in that order. `dark_toggle.css` styles the switch. Copy one of the self-contained [bundled themes](../themes/README.md) to `theme.css`; put independent site customization in `site.css`. Both files contain only a comment by default, preserving Pico's colors. `dark_toggle.js` powers the System/Light/Dark control and remembers the visitor's choice. See [Themes and page layout](../docs/themes.md).
+The editable `templates/page.html`, selected by `[site] template`, loads `/assets/pico.min.css`, `/assets/dark_toggle.css`, `/assets/theme.css`, and `/assets/site.css`, in that order. `dark_toggle.css` styles the switch. This branch uses the EPIC palette in `theme.css` and independent site customization in `site.css`. The self-contained [bundled themes](../themes/README.md) provide other palettes. `dark_toggle.js` powers the System/Light/Dark control and remembers the visitor's choice. See [Themes and page layout](../docs/themes.md).
 
 `pico.min.css` is Pico CSS 2.1.1, fetched from https://github.com/picocss/pico/blob/v2.1.1/css/pico.min.css and distributed with `LICENSE.pico.md`.
 

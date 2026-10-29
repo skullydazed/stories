@@ -101,7 +101,7 @@ class HttpTests(unittest.TestCase):
         shutil.copytree(FIXTURES, self.content)
         self.assets.mkdir()
         shutil.copyfile(FIXTURES.parent.parent / 'assets' / 'pico.min.css', self.assets / 'pico.min.css')
-        for name in ['dark_toggle.css', 'theme.css', 'site.css', 'dark_toggle.js']:
+        for name in ['dark_toggle.css', 'theme.css', 'site.css', 'dark_toggle.js', 'logo.png']:
             shutil.copyfile(FIXTURES.parent.parent / 'assets' / name, self.assets / name)
         (self.assets / 'sample.txt').write_text('asset bytes\n')
         (self.content / 'private.txt').write_text('must not leak')
@@ -545,6 +545,8 @@ class HttpTests(unittest.TestCase):
         self.assertEqual(server.request('/assets/sample.txt')[2], b'updated asset')
 
     def test_source_and_render_limits(self):
+        # Keep document size checks independent of the site's header and navigation.
+        self.template.write_text('<main>{% if error %}<h1>{{title}}</h1><p>{{message}}</p>{% else %}{{content()}}{% endif %}</main>')
         (self.content / 'exact.md').write_text('x' * 4096)
         (self.content / 'oversize.md').write_text('x' * 4097)
         (self.content / 'expanded.md').write_text('&' * 1000)
