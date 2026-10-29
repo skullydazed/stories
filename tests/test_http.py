@@ -835,7 +835,7 @@ class HttpTests(unittest.TestCase):
                 status, headers, body = server.request('/')
                 self.assertEqual(status, 500)
                 diagnostic = server.diagnostics()[before:]
-                self.assertIn(str(self.template), diagnostic)
+                self.assertIn('page.html: ', diagnostic)
                 self.assertIn(expected, diagnostic)
                 self.assertNotIn('cannot read/render', diagnostic)
                 self.assertNotIn('cannot render error page', diagnostic)
