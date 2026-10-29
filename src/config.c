@@ -97,30 +97,20 @@ bool configuration_listen_valid(const char *listen)
 	return inet_pton(family, host, address) == 1;
 }
 
-static char *path_from(const char *base, const char *value, bool rewrite_path, const char **reason)
+static bool path_valid(const char *value, bool rewrite_path, const char **reason)
 {
-	struct buffer path;
-	buffer_init(&path, STORIES_PATH_LIMIT - 1);
-	if (*value != '/')
+	if (strlen(value) >= STORIES_PATH_LIMIT)
 	{
-		buffer_puts(&path, base);
-		buffer_puts(&path, "/");
-	}
-	buffer_puts(&path, value);
-	if (path.failed)
-	{
-		*reason = "path is too long or memory allocation failed";
-		buffer_free(&path);
-		return NULL;
+		*reason = "path is too long";
+		return false;
 	}
 	/* CivetWeb's rewrite setting uses commas and equals as syntax. */
-	if (rewrite_path && (strchr(path.data, ',') || strchr(path.data, '=')))
+	if (rewrite_path && (strchr(value, ',') || strchr(value, '=')))
 	{
 		*reason = "path must not contain ',' or '='";
-		buffer_free(&path);
-		return NULL;
+		return false;
 	}
-	return path.data;
+	return true;
 }
 
 void configuration_free(struct configuration *configuration)
@@ -198,7 +188,7 @@ static const char *navigation_add(struct configuration *configuration, const cha
 	return NULL;
 }
 
-bool configuration_parse(const char *data, size_t size, const char *base_directory, struct configuration *output, char *error, size_t error_size)
+bool configuration_parse(const char *data, size_t size, struct configuration *output, char *error, size_t error_size)
 {
 	struct configuration configuration = {.threads = 8, .markdown_limit = 8u * 1024u * 1024u, .output_limit = 32u * 1024u * 1024u};
 	bool                 seen[sizeof(options) / sizeof(options[0])] = {false};
@@ -332,8 +322,10 @@ bool configuration_parse(const char *data, size_t size, const char *base_directo
 				reason = "expected a numeric IPv4 or bracketed IPv6 address and port (0-65535)";
 				goto fail;
 			}
+			if ((option->kind == OPTION_PATH || option->kind == OPTION_FILE) && !path_valid(value, option->kind == OPTION_PATH, &reason))
+				goto fail;
 			reason = "out of memory";
-			char *replacement = option->kind == OPTION_PATH || option->kind == OPTION_FILE ? path_from(base_directory, value, option->kind == OPTION_PATH, &reason) : strdup(value);
+			char *replacement = strdup(value);
 			if (!replacement)
 				goto fail;
 			free(*(char **)field);
@@ -408,8 +400,6 @@ bool configuration_load_search(const char *explicit_path, const char *const *sea
 	const char   *selected = explicit_path;
 	struct buffer input;
 	FILE         *file = NULL;
-	char          absolute[STORIES_PATH_LIMIT];
-	char          base[STORIES_PATH_LIMIT];
 	bool          result = false;
 	*output = (struct configuration){0};
 	buffer_init(&input, CONFIG_LIMIT);
@@ -436,34 +426,14 @@ bool configuration_load_search(const char *explicit_path, const char *const *sea
 		snprintf(error, error_size, "no configuration found in ./stories.conf or /etc/stories.conf");
 		goto done;
 	}
-	/* Preserve the selected file's directory even when the file itself is a symlink. */
-	size_t path_length;
-	if (*selected == '/')
+	if (strlen(selected) >= STORIES_PATH_LIMIT)
 	{
-		path_length = strlen(selected);
-		if (path_length >= sizeof(absolute))
-			goto path_error;
-		memcpy(absolute, selected, path_length + 1);
+		snprintf(error, error_size, "configuration path is too long");
+		goto done;
 	}
-	else
-	{
-		char cwd[STORIES_PATH_LIMIT];
-		if (!getcwd(cwd, sizeof(cwd)))
-			goto path_error;
-		int length = snprintf(absolute, sizeof(absolute), "%s/%s", cwd, selected);
-		if (length < 0 || (size_t)length >= sizeof(absolute))
-			goto path_error;
-		path_length = (size_t)length;
-	}
-	memcpy(base, absolute, path_length + 1);
-	char *slash = strrchr(base, '/');
-	if (slash == base)
-		slash[1] = '\0';
-	else
-		*slash = '\0';
 	/* Open nonblocking before checking the type: a FIFO must fail validation
 	 * immediately, not wait indefinitely for a writer. */
-	int descriptor = open(absolute, O_RDONLY | O_CLOEXEC | O_NONBLOCK);
+	int descriptor = open(selected, O_RDONLY | O_CLOEXEC | O_NONBLOCK);
 	if (descriptor < 0)
 	{
 		snprintf(error, error_size, "%s: %s", selected, strerror(errno));
@@ -495,15 +465,11 @@ bool configuration_load_search(const char *explicit_path, const char *const *sea
 		goto done;
 	}
 	char parse_error[512];
-	result = configuration_parse(input.data ? input.data : "", input.size, base, output, parse_error, sizeof(parse_error));
+	result = configuration_parse(input.data ? input.data : "", input.size, output, parse_error, sizeof(parse_error));
 	if (!result)
 		snprintf(error, error_size, "%s: %s", selected, parse_error);
 	else if (error_size)
 		error[0] = '\0';
-	goto done;
-
-path_error:
-	snprintf(error, error_size, "configuration path is too long or inaccessible");
 done:
 	if (file)
 		fclose(file);

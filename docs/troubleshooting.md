@@ -14,7 +14,7 @@ If discovery reports no configuration, provide `--config` or place `stories.conf
 
 For a configuration diagnostic, inspect the named file, line, section, and setting. Values have no quoting or inline-comment syntax. A value followed by `# a comment` includes those bytes in the value; put comments on their own lines instead.
 
-Both roots must be existing directories, readable by the process account, and disjoint. Relative paths start at the configuration file's directory, not the process working directory. When moving an example config, update its relative roots. Configuration validation does not require every navigation target or configured resolution directory to exist.
+Both roots must be existing directories, readable by the process account, and disjoint. Relative paths start at the process working directory. Check the directory from which Stories was started, or use absolute paths. Configuration validation does not require every navigation target or configured resolution directory to exist.
 
 `[site] template` is required, including in existing configurations when upgrading. It must select a readable, nonempty regular file containing valid Inja markup, limited to 1 MiB with no NUL bytes. The supplied layout is `templates/page.html` in a checkout or `share/stories/templates/page.html` in an installation. Template diagnostics name the selected file; see [Themes and page layout](themes.md) for supported values, loops, and conditionals.
 

@@ -30,7 +30,7 @@ static struct configuration test_configuration(void)
 	const char          *text = "[content]\nroot = docs\nresolution_order = disambiguation, command, function\n[assets]\nroot = assets\n[site]\ntemplate = page.html\ntitle = Test & <site>\n[navigation]\nHome = /\n";
 	struct configuration configuration;
 	char                 error[256];
-	CHECK(configuration_parse(text, strlen(text), "/tmp", &configuration, error, sizeof(error)));
+	CHECK(configuration_parse(text, strlen(text), &configuration, error, sizeof(error)));
 	return configuration;
 }
 
@@ -63,8 +63,8 @@ static void test_configuration_parser(void)
 	CHECK(configuration.threads == 8);
 	CHECK(!configuration.access_log_path && !configuration.error_log_path);
 	CHECK(configuration.directory_count == 3);
-	CHECK(!strcmp(configuration.content_root, "/tmp/docs"));
-	CHECK(!strcmp(configuration.template_path, "/tmp/page.html"));
+	CHECK(!strcmp(configuration.content_root, "docs"));
+	CHECK(!strcmp(configuration.template_path, "page.html"));
 	CHECK(!strcmp(configuration.navigation[0].url, "/"));
 	configuration_free(&configuration);
 	const char *invalid[] = {
@@ -86,18 +86,18 @@ static void test_configuration_parser(void)
 	for (size_t i = 0; i < sizeof(invalid) / sizeof(invalid[0]); i++)
 	{
 		char error[256];
-		CHECK(!configuration_parse(invalid[i], strlen(invalid[i]), "/tmp", &configuration, error, sizeof(error)));
+		CHECK(!configuration_parse(invalid[i], strlen(invalid[i]), &configuration, error, sizeof(error)));
 		CHECK(configuration.content_root == NULL && configuration.directory_count == 0 && configuration.listen == NULL);
 		CHECK(error[0]);
 		configuration_free(&configuration);
 	}
 	char        error[256];
 	const char *logs = "[content]\nroot=docs\n[assets]\nroot=assets\n[site]\ntemplate=page.html\n[logging]\naccess_log=logs/access.log\nerror_log=/var/log/stories-error.log\n";
-	CHECK(configuration_parse(logs, strlen(logs), "/tmp", &configuration, error, sizeof(error)));
-	CHECK(!strcmp(configuration.access_log_path, "/tmp/logs/access.log"));
+	CHECK(configuration_parse(logs, strlen(logs), &configuration, error, sizeof(error)));
+	CHECK(!strcmp(configuration.access_log_path, "logs/access.log"));
 	CHECK(!strcmp(configuration.error_log_path, "/var/log/stories-error.log"));
 	configuration_free(&configuration);
-	CHECK(!configuration_parse("[site]\ntitle=x\0hidden", 21, "/tmp", &configuration, error, sizeof(error)));
+	CHECK(!configuration_parse("[site]\ntitle=x\0hidden", 21, &configuration, error, sizeof(error)));
 	size_t number;
 	CHECK(configuration_unsigned("1024", 1024, &number) && number == 1024);
 	CHECK(!configuration_unsigned("1025", 1024, &number));
@@ -109,7 +109,7 @@ static void test_configuration_parser(void)
 	char *oversize = malloc(CONFIG_LIMIT + 1);
 	CHECK(oversize);
 	memset(oversize, 'x', CONFIG_LIMIT + 1);
-	CHECK(!configuration_parse(oversize, CONFIG_LIMIT + 1, "/tmp", &configuration, error, sizeof(error)));
+	CHECK(!configuration_parse(oversize, CONFIG_LIMIT + 1, &configuration, error, sizeof(error)));
 	free(oversize);
 }
 
@@ -150,7 +150,7 @@ static void test_configuration_diagnostics(void)
 	char                 error[512];
 	for (size_t i = 0; i < sizeof(cases) / sizeof(cases[0]); i++)
 	{
-		CHECK(!configuration_parse(cases[i].input, strlen(cases[i].input), "/tmp", &configuration, error, sizeof(error)));
+		CHECK(!configuration_parse(cases[i].input, strlen(cases[i].input), &configuration, error, sizeof(error)));
 		CHECK(strstr(error, cases[i].diagnostic));
 		CHECK(!configuration.listen && !configuration.content_root && !configuration.asset_root);
 		configuration_free(&configuration);
@@ -163,14 +163,14 @@ static void test_configuration_diagnostics(void)
 		if (!((byte < 32 && byte != '\n' && byte != '\r' && byte != '\t') || byte == 127))
 			continue;
 		*marker = (char)byte;
-		CHECK(!configuration_parse(control, sizeof(control) - 1, "/tmp", &configuration, error, sizeof(error)));
+		CHECK(!configuration_parse(control, sizeof(control) - 1, &configuration, error, sizeof(error)));
 		char diagnostic[80];
 		snprintf(diagnostic, sizeof(diagnostic), "line 6: disallowed control byte 0x%02X", byte);
 		CHECK(strstr(error, diagnostic));
 		configuration_free(&configuration);
 	}
 	const char *valid = "[content]\r\nroot = docs\r\n[assets]\r\nroot = assets\r\n[site]\r\ntemplate = page.html\r\ntitle = Tab\tvalue\r\n";
-	CHECK(configuration_parse(valid, strlen(valid), "/tmp", &configuration, error, sizeof(error)));
+	CHECK(configuration_parse(valid, strlen(valid), &configuration, error, sizeof(error)));
 	configuration_free(&configuration);
 }
 

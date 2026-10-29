@@ -35,7 +35,7 @@ The documentation example is ready to run from the checkout:
 ./build/stories --config examples/docs.conf.example
 ```
 
-Open <http://127.0.0.1:8080/>. Stop the foreground process with Ctrl-C. The example uses `docs/` as its content root and `assets/` as its static root. Their paths resolve relative to the configuration file, so the configuration also works when invoked from another working directory using an absolute path.
+Open <http://127.0.0.1:8080/>. Stop the foreground process with Ctrl-C. The example uses `docs/` as its content root and `assets/` as its static root. Paths resolve relative to the process working directory, so run these commands from the checkout root.
 
 ## Create your own site
 

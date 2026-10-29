@@ -8,7 +8,7 @@ title = My Documentation
 template = templates/page.html
 ```
 
-The path resolves relative to the configuration file, independently of the working directory. Keep templates outside the public asset and Markdown roots. There is no compiled-in layout or source-tree fallback. Existing configurations need a `template` setting when upgrading to this version.
+The path resolves relative to the process working directory. Keep templates outside the public asset and Markdown roots. There is no compiled-in layout or source-tree fallback. Existing configurations need a `template` setting when upgrading to this version.
 
 Stories checks the template before starting its listener, then reads and parses it again for each document or error render. Edits appear on the next uncached request, without restarting or rebuilding the server. Template bytes and parsed state are request-owned and released after expansion; there is no application template cache. `--check-config` checks the template as well as configuration and roots. Missing files, nonregular files, empty templates, NUL bytes, and malformed Inja syntax fail validation. Startup also renders representative document/error paths with and without navigation; unknown names fail when evaluated, including in branches selected later by a request. Template files are limited to 1 MiB. Publish complete templates by atomic replacement to avoid readers seeing a partial edit.
 

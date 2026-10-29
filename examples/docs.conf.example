@@ -1,14 +1,14 @@
 # Serve the project's documentation directly from a checkout or installation.
-# Paths resolve relative to this file, independently of the working directory.
+# Run from the checkout root or installed share/stories directory. Paths resolve relative to the working directory.
 [content]
-root = ../docs
+root = docs
 
 [assets]
-root = ../assets
+root = assets
 
 [site]
 title = Stories Documentation
-template = ../templates/page.html
+template = templates/page.html
 
 [navigation]
 Getting started = /getting-started
