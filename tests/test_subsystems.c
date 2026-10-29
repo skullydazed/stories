@@ -193,6 +193,11 @@ static void test_links(void)
 		{"time%2emd#x", "command/plain.md", "/command/time#x"},
 		{"time.%6d%64#x", "command/plain.md", "/command/time#x"},
 		{"time%2e%6d%64#x", "command/plain.md", "/command/time#x"},
+		{"../scripts/2.8script.md", "special/help_root.md", "/scripts/2.8script"},
+		{"../scripts/2%2e8script%2emd?q=x#details", "special/help_root.md", "/scripts/2.8script?q=x#details"},
+		{"file.html.md", "index.md", "/file.html"},
+		{"file.css.md", "index.md", "/file.css"},
+		{"release.2/index.md", "index.md", "/release.2/"},
 		{"deals%", "command/time.md", "deals%"},
 		{"deals%GG", "command/time.md", "deals%GG"},
 		{"deals%?next=time.md#discount", "command/time.md", "deals%?next=time.md#discount"},
@@ -212,7 +217,7 @@ static void test_links(void)
 		CHECK(!strcmp(output.data, cases[i].expected));
 		buffer_free(&output);
 	}
-	const char *bad[] = {"../../outside.md", "file%00.md", "%GG.md", "file\\name.md", "file\n.md", "deals%%2e%6d%64", "file.html.md", "file.css.md"};
+	const char *bad[] = {"../../outside.md", "file%00.md", "%GG.md", "file\\name.md", "file\n.md", "deals%%2e%6d%64", "file.md.md", "file.MD.md", "directory.md/index.md"};
 	for (size_t i = 0; i < sizeof(bad) / sizeof(bad[0]); i++)
 	{
 		struct buffer output;
@@ -226,10 +231,12 @@ static void test_links(void)
 	CHECK(!url_path_valid("/abc\0hidden", 11));
 	CHECK(url_path_valid("/command/time", 13));
 	CHECK(url_path_valid("/command/", 9));
-	CHECK(!url_path_has_extension("/command/time", strlen("/command/time")));
-	CHECK(!url_path_has_extension("/command/", strlen("/command/")));
-	CHECK(url_path_has_extension("/command/time.html", strlen("/command/time.html")));
-	CHECK(url_path_has_extension("/command.html/", strlen("/command.html/")));
+	CHECK(!url_markdown_extension("/command/time", strlen("/command/time")));
+	CHECK(!url_markdown_extension("/command/time.html", strlen("/command/time.html")));
+	CHECK(!url_markdown_extension("/command.html/", strlen("/command.html/")));
+	CHECK(url_markdown_extension("/command/time.md", strlen("/command/time.md")));
+	CHECK(url_markdown_extension("/command/time.MD", strlen("/command/time.MD")));
+	CHECK(url_markdown_extension("/command.md/", strlen("/command.md/")));
 }
 
 static void write_configuration(const char *path, const char *title)

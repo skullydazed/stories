@@ -27,7 +27,8 @@ Check the mapping between the public URL and the Markdown tree:
 - `/` needs `index.md` at the content root.
 - `/guide` normally needs `guide.md`, or redirects to `/guide/` when `guide/index.md` exists.
 - `/guide/` needs `guide/index.md`.
-- `/guide.md` and extension-bearing document URLs return 404.
+- `/scripts/2.8script` needs `scripts/2.8script.md`; dots in names are preserved.
+- A final path component ending in `.md` (case-insensitive) returns 404.
 
 Documents must be regular files. Symlinks are rejected at every Markdown path component, and hidden components are not published. Check directory traversal and file read permissions for the process account. A linked destination may be missing even when its referring page renders successfully.
 
@@ -41,7 +42,7 @@ Malformed decoded paths, including dot segments, repeated separators, backslashe
 
 A 500 can result from a document read failure, allocation failure, an exceeded Markdown/output limit, an invalid local Markdown link, or a template failure. The error log identifies the failing file and cause: system errors for I/O, byte counts and limits for size failures, the rejected destination and reason for links, or template parser/expansion details. Stories discards incomplete output rather than returning a partial successful page. If the error page also fails to render, its cause is logged separately.
 
-Check recent link edits for malformed percent escapes in `.md` destinations, attempts to escape the content root with `..`, and names such as `page.html.md` that cannot form an extensionless document URL. Also check the file's source size and configured `output_limit`, which applies to the complete rendered page. See [Configuration](configuration.md) and [Writing and publishing](writing.md).
+Check recent link edits for malformed percent escapes in `.md` destinations, attempts to escape the content root with `..`, and names such as `page.md.md` whose public URL retains the reserved Markdown suffix. Also check the file's source size and configured `output_limit`, which applies to the complete rendered page. See [Configuration](configuration.md) and [Writing and publishing](writing.md).
 
 ## The layout has no stylesheet
 

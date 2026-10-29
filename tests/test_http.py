@@ -149,17 +149,46 @@ class HttpTests(unittest.TestCase):
 
     def test_index_rules_and_source_extensions(self):
         for extension in ['html', 'txt', 'css']:
-            (self.content / 'command' / f'time.{extension}.md').write_text('# Not a public document URL\n')
+            (self.content / 'command' / f'time.{extension}.md').write_text('# Dotted document name\n')
+        (self.content / 'command' / 'time.md.md').write_text('# Reserved Markdown suffix\n')
         server = self.start()
-        for path in ['/', '/command/', '/command/time']:
+        for path in ['/', '/command/', '/command/time', '/command/time.html', '/command/time.txt', '/command/time.css', '/command/time%2ehtml']:
             with self.subTest(path=path):
                 self.assertEqual(server.request(path)[0], 200)
-        for path, target in [('/command', '/command/'), ('/command/index', '/command/'), ('/index', '/')]:
+        for path, target in [('/command', '/command/'), ('/command/index', '/command/'), ('/index', '/'), ('/time.html_command', '/command/time.html')]:
             with self.subTest(path=path):
                 status, headers, _ = server.request(path)
                 self.assertEqual(status, 301)
                 self.assertEqual(headers['location'], target)
-        for path in ['/function/', '/command/time/', '/command/time.md', '/command/time.MD', '/command/time.html', '/command/time.txt', '/command/time.css', '/command/time%2ehtml', '/time.html_command', '/index.md', '/private.txt', '/assets/sample.md', '/assets']:
+        for path in ['/function/', '/command/time/', '/command/time.md', '/command/time.MD', '/command/time.html.md', '/index.md', '/private.txt', '/assets/sample.md', '/assets']:
+            with self.subTest(path=path):
+                self.assertEqual(server.request(path)[0], 404)
+
+    def test_dotted_markdown_links_and_directory_indexes(self):
+        (self.content / 'scripts').mkdir()
+        (self.content / 'scripts' / '2.8script.md').write_text('# Dotted script\n')
+        (self.content / 'special').mkdir()
+        (self.content / 'special' / 'help_root.md').write_text('[script](../scripts/2.8script.md)\n\n[encoded](../scripts/2%2e8script%2emd?q=x#details)\n\n[index](../release.2/index.md)\n')
+        (self.content / 'release.2').mkdir()
+        (self.content / 'release.2' / 'index.md').write_text('# Dotted directory\n')
+        server = self.start()
+        status, _, body = server.request('/special/help_root')
+        self.assertEqual(status, 200)
+        self.assertIn(b'href="/scripts/2.8script"', body)
+        self.assertIn(b'href="/scripts/2.8script?q=x#details"', body)
+        self.assertIn(b'href="/release.2/"', body)
+        for path, heading in [('/scripts/2.8script', b'<h1>Dotted script</h1>'), ('/scripts/2%2e8script?q=x', b'<h1>Dotted script</h1>'), ('/release.2/', b'<h1>Dotted directory</h1>')]:
+            with self.subTest(path=path):
+                status, _, body = server.request(path)
+                self.assertEqual(status, 200)
+                self.assertIn(heading, body)
+                self.assertEqual(server.request(path, 'HEAD')[0], 200)
+        for path in ['/release.2', '/release.2/index']:
+            with self.subTest(path=path):
+                status, headers, _ = server.request(path)
+                self.assertEqual(status, 301)
+                self.assertEqual(headers['location'], '/release.2/')
+        for path in ['/scripts/2.8script.md', '/scripts/2.8script.MD', '/release.2/index.md']:
             with self.subTest(path=path):
                 self.assertEqual(server.request(path)[0], 404)
 
@@ -598,7 +627,7 @@ class HttpTests(unittest.TestCase):
             ('before [a](%GG.md) after', '%GG.md', 'malformed percent escape'),
             ('before [reference][target] after\n\n[target]: ../../outside.md\n', '../../outside.md', 'path escapes the content root'),
             ('before [bad](file%00.md) after', 'file%00.md', 'decoded path contains a NUL byte'),
-            ('before [bad](file.html.md) after', 'file.html.md', 'filename retains an extension after removing .md'),
+            ('before [bad](file.md.md) after', 'file.md.md', 'filename retains a Markdown extension after removing .md'),
             ('before [bad](file%5Cname.md) after', 'file%5Cname.md', 'decoded path contains a backslash'),
             ('before [bad](file&#10;name.md) after', 'file\\x0Aname.md', 'decoded path contains a control byte'),
         ]

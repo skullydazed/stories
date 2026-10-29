@@ -7,19 +7,9 @@
 
 bool url_markdown_extension(const char *path, size_t size)
 {
-	return size >= 3 && path[size - 3] == '.' && (path[size - 2] == 'm' || path[size - 2] == 'M') && (path[size - 1] == 'd' || path[size - 1] == 'D');
-}
-
-bool url_path_has_extension(const char *path, size_t size)
-{
 	while (size && path[size - 1] == '/')
 		size--;
-	while (size && path[size - 1] != '/')
-	{
-		if (path[--size] == '.')
-			return true;
-	}
-	return false;
+	return size >= 3 && path[size - 3] == '.' && (path[size - 2] == 'm' || path[size - 2] == 'M') && (path[size - 1] == 'd' || path[size - 1] == 'D');
 }
 
 bool url_path_valid(const char *path, size_t size)
@@ -57,7 +47,7 @@ static bool document_location(const char *source, size_t length, struct buffer *
 	length -= 3;
 	if ((length == 5 && !memcmp(source, "index", 5)) || (length >= 6 && !memcmp(source + length - 6, "/index", 6)))
 		length -= 5;
-	if (url_path_has_extension(source, length))
+	if (url_markdown_extension(source, length))
 		return false;
 	return buffer_puts(output, "/") && buffer_url(output, source, length);
 }
@@ -206,7 +196,7 @@ bool url_rewrite_link(const char *destination, size_t size, const char *source, 
 	if (!document_location(normalized, normalized_size, output))
 	{
 		if (!output->failed)
-			return link_failure(destination, size, source, output, "filename retains an extension after removing .md");
+			return link_failure(destination, size, source, output, "filename retains a Markdown extension after removing .md");
 		return false;
 	}
 	return buffer_append(output, destination + path_size, size - path_size);

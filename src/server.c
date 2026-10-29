@@ -118,7 +118,7 @@ static int request_begin(struct mg_connection *connection)
 		return send_error(connection, server, 400, "Bad Request", "Invalid document path.");
 	size_t path_size = strlen(path);
 	bool   asset = !strncmp(path, "/assets/", 8);
-	if (url_markdown_extension(path, path_size) || (!asset && url_path_has_extension(path, path_size)))
+	if (url_markdown_extension(path, path_size))
 		return send_error(connection, server, 404, "Not Found", "No document exists at this URL.");
 	if (asset)
 	{

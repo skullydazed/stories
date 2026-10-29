@@ -71,9 +71,9 @@ Installation = /install
 Reference = /reference/
 ```
 
-Navigation destinations must be local paths beginning with one `/`, or HTTP(S) URLs. They are configuration values rather than Markdown links, so use extensionless document URLs directly. Duplicate navigation labels are rejected. Stories does not check that a linked document exists at startup.
+Navigation destinations must be local paths beginning with one `/`, or HTTP(S) URLs. They are configuration values rather than Markdown links, so use public document URLs without the final `.md` source extension. Duplicate navigation labels are rejected. Stories does not check that a linked document exists at startup.
 
-Each page's title comes from its first Markdown heading at any level. Inline formatting is reduced to text. If that heading is empty or missing, Stories uses the extensionless document basename.
+Each page's title comes from its first Markdown heading at any level. Inline formatting is reduced to text. If that heading is empty or missing, Stories uses the document basename without its final `.md` extension.
 
 The HTML template controls the layout, stylesheet links, and navigation markup for both documents and errors. See [Themes and page layout](themes.md) for substitutions, loops, Pico customization, and light/dark mode. Template edits appear on the next uncached request, without restarting or rebuilding Stories. Changing the configured template path requires restarting, like other configuration changes.
 
