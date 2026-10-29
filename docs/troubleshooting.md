@@ -39,7 +39,7 @@ Malformed decoded paths, including dot segments, repeated separators, backslashe
 
 ## A page returns 500
 
-A 500 can result from a document read failure, allocation failure, an exceeded Markdown/output limit, or an invalid local Markdown link. Stories discards incomplete output rather than returning a partial successful page.
+A 500 can result from a document read failure, allocation failure, an exceeded Markdown/output limit, an invalid local Markdown link, or a template failure. The error log identifies the failing file and cause: system errors for I/O, byte counts and limits for size failures, the rejected destination and reason for links, or template parser/expansion details. Stories discards incomplete output rather than returning a partial successful page. If the error page also fails to render, its cause is logged separately.
 
 Check recent link edits for malformed percent escapes in `.md` destinations, attempts to escape the content root with `..`, and names such as `page.html.md` that cannot form an extensionless document URL. Also check the file's source size and configured `output_limit`, which applies to the complete rendered page. See [Configuration](configuration.md) and [Writing and publishing](writing.md).
 

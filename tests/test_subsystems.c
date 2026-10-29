@@ -2,10 +2,12 @@
 #include "config.h"
 #include "document.h"
 #include "entities.h"
+#include "logging.h"
 #include "render.h"
 #include "page_template.h"
 #include "url.h"
 
+#include <errno.h>
 #include <fcntl.h>
 #include <stdio.h>
 #include <stdlib.h>
@@ -324,7 +326,7 @@ static void test_resolver(void)
 	for (size_t i = 0; i < sizeof(cases) / sizeof(cases[0]); i++)
 	{
 		struct document_route route;
-		document_resolve(root, &configuration, cases[i].path, strlen(cases[i].path), &route);
+		document_resolve(root, &configuration, cases[i].path, strlen(cases[i].path), &route, NULL);
 		CHECK(route.status == cases[i].status);
 		if (route.status == ROUTE_DOCUMENT || route.status == ROUTE_REDIRECT)
 		{
@@ -332,7 +334,7 @@ static void test_resolver(void)
 			CHECK(!strcmp(route.source, cases[i].source));
 			CHECK(!strcmp(route.location.data, cases[i].location));
 			struct buffer content;
-			CHECK(document_read(route.fd, 65536, &content));
+			CHECK(document_read(route.fd, route.source, 65536, &content, NULL));
 			CHECK(content.size);
 			buffer_free(&content);
 		}
@@ -342,13 +344,67 @@ static void test_resolver(void)
 	configuration_free(&configuration);
 }
 
+static void test_failure_diagnostics(void)
+{
+	char directory[] = "/tmp/stories-diagnostics-XXXXXX";
+	CHECK(mkdtemp(directory));
+	char path[STORIES_PATH_LIMIT];
+	CHECK(snprintf(path, sizeof(path), "%s/error.log", directory) > 0);
+	struct configuration configuration = test_configuration();
+	configuration.error_log_path = strdup(path);
+	CHECK(configuration.error_log_path);
+	struct logging logging;
+	char           error[512];
+	CHECK(logging_open(&logging, &configuration, error, sizeof(error)));
+
+	struct buffer output;
+	CHECK(!document_read(-1, "unreadable.md", 64, &output, &logging));
+	buffer_free(&output);
+	int descriptors[2];
+	CHECK(!pipe(descriptors));
+	CHECK(!document_read(descriptors[1], "write-only.md", 65536, &output, &logging));
+	buffer_free(&output);
+	close(descriptors[0]);
+	close(descriptors[1]);
+	struct document_route route;
+	document_resolve(-1, &configuration, "/missing", 8, &route, &logging);
+	CHECK(route.status == ROUTE_FAILURE);
+	document_route_free(&route);
+
+	buffer_init_logged(&output, 3, &logging, "bounded.md");
+	CHECK(buffer_puts(&output, "abc"));
+	CHECK(!buffer_puts(&output, "d"));
+	CHECK(!buffer_puts(&output, "e"));
+	buffer_free(&output);
+	logging_close(&logging);
+
+	FILE *file = fopen(path, "r");
+	CHECK(file);
+	char   diagnostics[4096];
+	size_t size = fread(diagnostics, 1, sizeof(diagnostics) - 1, file);
+	CHECK(!ferror(file) && feof(file));
+	diagnostics[size] = '\0';
+	CHECK(!fclose(file));
+	char expected[512];
+	snprintf(expected, sizeof(expected), "unreadable.md: cannot stat document: %s", strerror(EBADF));
+	CHECK(strstr(diagnostics, expected));
+	snprintf(expected, sizeof(expected), "write-only.md: cannot read document: %s", strerror(EBADF));
+	CHECK(strstr(diagnostics, expected));
+	snprintf(expected, sizeof(expected), "missing.md: cannot duplicate content root descriptor: %s", strerror(EBADF));
+	CHECK(strstr(diagnostics, expected));
+	const char *limit = strstr(diagnostics, "bounded.md: buffer limit exceeded (limit 3 bytes, used 3 bytes, appending 1 bytes)");
+	CHECK(limit && !strstr(limit + 1, "bounded.md:"));
+	CHECK(!unlink(path));
+	CHECK(!rmdir(directory));
+	configuration_free(&configuration);
+}
+
 static void test_template(struct configuration *configuration)
 {
 	free(configuration->template_path);
 	configuration->template_path = strdup(TEST_FIXTURE_DIR "/../../templates/page.html");
 	CHECK(configuration->template_path);
-	char error[512];
-	CHECK(page_template_check(configuration, error, sizeof(error)));
+	CHECK(page_template_check(configuration, NULL));
 }
 
 static void test_renderer(void)
@@ -357,7 +413,7 @@ static void test_renderer(void)
 	test_template(&configuration);
 	const char   *markdown = "# Heading\n\n[inline](../function/time.md?a=1&b=2#x)\n\n[reference][r]\n\n[r]: index.md \"Title &amp; quote\"\n\n[encoded](time&#46;md)\n\n![*rich* <b>label</b>](../assets/image.png \"image title\")\n\n~~gone~~\n\n- [x] done\n\n| A | B |\n|---|---|\n| one | two |\n\n```c\n<code>&\n```\n\nhttps://example.org\n\n<a href=\"raw.md\">raw HTML</a>\n\n&copy; &#x1F600; &NotEqualTilde;\n";
 	struct buffer output;
-	CHECK(render_document(&configuration, "command/time.md", markdown, strlen(markdown), &output));
+	CHECK(render_document(&configuration, "command/time.md", markdown, strlen(markdown), &output, NULL));
 	const char *expected[] = {"<h1>Heading</h1>", "href=\"/function/time?a=1&amp;b=2#x\"", "href=\"/command/\"", "href=\"/command/time\"", "title=\"Title &amp; quote\"", "src=\"../assets/image.png\"", "alt=\"rich &lt;b&gt;label&lt;/b&gt;\"", "<del>gone</del>", "disabled checked", "<table>", "language-c", "&lt;code&gt;&amp;", "href=\"https://example.org\"", "<a href=\"raw.md\">", "Test &amp; &lt;site&gt;", "\xc2\xa9"};
 	for (size_t i = 0; i < sizeof(expected) / sizeof(expected[0]); i++)
 		CHECK(strstr(output.data, expected[i]));
@@ -370,18 +426,18 @@ static void test_renderer(void)
 	};
 	for (size_t i = 0; i < sizeof(invalid_links) / sizeof(invalid_links[0]); i++)
 	{
-		CHECK(!render_document(&configuration, "command/time.md", invalid_links[i], strlen(invalid_links[i]), &output));
+		CHECK(!render_document(&configuration, "command/time.md", invalid_links[i], strlen(invalid_links[i]), &output, NULL));
 		CHECK(output.failed);
 		buffer_free(&output);
 	}
 	const char *percent_label = "[100%](x)";
-	CHECK(render_document(&configuration, "command/time.md", percent_label, strlen(percent_label), &output));
+	CHECK(render_document(&configuration, "command/time.md", percent_label, strlen(percent_label), &output, NULL));
 	CHECK(strstr(output.data, "<a href=\"x\">100%</a>"));
 	buffer_free(&output);
 	configuration.output_limit = 32;
-	CHECK(!render_document(&configuration, "index.md", "# too big", 9, &output));
+	CHECK(!render_document(&configuration, "index.md", "# too big", 9, &output, NULL));
 	buffer_free(&output);
-	CHECK(render_error(&configuration, "Error", "<escaped>", &output));
+	CHECK(render_error(&configuration, "Error", "<escaped>", &output, NULL));
 	CHECK(strstr(output.data, "&lt;escaped&gt;"));
 	buffer_free(&output);
 	configuration_free(&configuration);
@@ -409,7 +465,7 @@ static void test_renderer_titles(void)
 	for (size_t i = 0; i < sizeof(cases) / sizeof(cases[0]); i++)
 	{
 		struct buffer output;
-		CHECK(render_document(&configuration, "command/plain.md", cases[i].markdown, strlen(cases[i].markdown), &output));
+		CHECK(render_document(&configuration, "command/plain.md", cases[i].markdown, strlen(cases[i].markdown), &output, NULL));
 		char expected[512];
 		snprintf(expected, sizeof(expected), "<title>%s — Test &amp; &lt;site&gt;</title>", cases[i].title);
 		CHECK(strstr(output.data, expected));
@@ -426,6 +482,7 @@ int main(void)
 	test_configuration_discovery();
 	test_links();
 	test_resolver();
+	test_failure_diagnostics();
 	test_renderer();
 	test_renderer_titles();
 	puts("subsystem tests passed");

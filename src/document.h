@@ -23,8 +23,9 @@ struct document_route
 	struct buffer     location;
 };
 
-void document_resolve(int root_fd, const struct configuration *configuration, const char *path, size_t size, struct document_route *route);
+void document_resolve(int root_fd, const struct configuration *configuration, const char *path, size_t size, struct document_route *route, struct logging *logging);
 void document_route_free(struct document_route *route);
-bool document_read(int fd, size_t limit, struct buffer *output);
+/* Logs failures with the borrowed source filename; source and logging must remain valid while output is used. Output owns any bytes read, including on failure, and must always be freed by the caller. */
+bool document_read(int fd, const char *source, size_t limit, struct buffer *output, struct logging *logging);
 
 #endif

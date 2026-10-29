@@ -180,11 +180,8 @@ int main(int argc, char **argv)
 		}
 		logger = &logging;
 	}
-	if (!page_template_check(&configuration, error, sizeof(error)))
-	{
-		logging_error(logger, "%s", error);
+	if (!page_template_check(&configuration, logger))
 		goto done;
-	}
 	if (check)
 	{
 		if (!server_check_roots(&configuration, error, sizeof(error)))

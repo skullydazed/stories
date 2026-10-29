@@ -365,7 +365,8 @@ class HttpTests(unittest.TestCase):
                 lines = [line for line in text.splitlines() if f'log_case={index} HTTP/1.1"' in line]
                 self.assertEqual(len(lines), 1)
                 self.assertRegex(lines[0], rf'HTTP/1.1" {expected} [0-9]+ ')
-        self.assertIn('cannot read/render document: broken.md', server.diagnostics())
+        self.assertEqual(server.diagnostics().count('broken.md: invalid Markdown link "../../outside.md": path escapes the content root'), 1)
+        self.assertNotIn('cannot read/render', server.diagnostics())
         self.assertRegex(server.diagnostics(), r'\d{4}-\d{2}-\d{2}T.*Z stories: ')
         self.assertNotIn('cannot read/render', server.output())
         self.assertNotIn('HTTP/1.1"', server.diagnostics())
@@ -553,24 +554,39 @@ class HttpTests(unittest.TestCase):
         status, _, body = server.request('/oversize')
         self.assertEqual(status, 500)
         self.assertNotIn(b'x' * 100, body)
+        self.assertEqual(server.diagnostics().count('oversize.md: source size 4097 bytes exceeds read limit 4096 bytes'), 1)
         self.assertEqual(server.request('/oversize', 'HEAD')[0], 500)
         server.stop()
         server = self.start(markdown_limit=4096, output_limit=2048)
         status, _, body = server.request('/expanded')
         self.assertEqual(status, 500)
         self.assertNotIn(b'&amp;' * 20, body)
+        self.assertEqual(server.diagnostics().count('expanded.md: buffer limit exceeded (limit 2048 bytes,'), 1)
+        self.assertNotIn('invalid Inja template', server.diagnostics())
         self.assertEqual(server.raw('HEAD', '/expanded')[1], b'')
         self.assertEqual(server.request('/command/time')[0], 200)
 
     def test_failed_links_do_not_send_partial_documents(self):
         document = self.content / 'command' / 'failed-links.md'
         server = self.start()
-        cases = ['before [x](../../outside.md) after', 'before [a](%GG.md) after', 'before [reference][target] after\n\n[target]: ../../outside.md\n', 'before [bad](file%00.md) after']
-        for markdown in cases:
+        cases = [
+            ('before [x](../../outside.md) after', '../../outside.md', 'path escapes the content root'),
+            ('before [a](%GG.md) after', '%GG.md', 'malformed percent escape'),
+            ('before [reference][target] after\n\n[target]: ../../outside.md\n', '../../outside.md', 'path escapes the content root'),
+            ('before [bad](file%00.md) after', 'file%00.md', 'decoded path contains a NUL byte'),
+            ('before [bad](file.html.md) after', 'file.html.md', 'filename retains an extension after removing .md'),
+            ('before [bad](file%5Cname.md) after', 'file%5Cname.md', 'decoded path contains a backslash'),
+            ('before [bad](file&#10;name.md) after', 'file\\x0Aname.md', 'decoded path contains a control byte'),
+        ]
+        for markdown, destination, reason in cases:
             with self.subTest(markdown=markdown):
                 document.write_text(markdown)
+                before = len(server.diagnostics())
                 status, headers, body = server.request('/command/failed-links')
                 self.assertEqual(status, 500)
+                diagnostic = server.diagnostics()[before:]
+                self.assertEqual(len(diagnostic.splitlines()), 1, diagnostic)
+                self.assertIn(f'command/failed-links.md: invalid Markdown link "{destination}": {reason}', diagnostic)
                 self.assertEqual(int(headers['content-length']), len(body))
                 self.assertIn(b'Internal Server Error', body)
                 self.assertNotIn(b'before ', body)
@@ -747,15 +763,29 @@ class HttpTests(unittest.TestCase):
     def test_template_failure_after_startup_and_recovery(self):
         server = self.start()
         original = self.template.read_bytes()
-        invalid = [b'prefix {% if error %}unclosed', b'prefix {{unknown}}', b'prefix {% if title != "Page" %}{{unknown}}{% endif %}', b'prefix\0hidden', b'x' * (1024 * 1024 + 1), b'']
-        for source in invalid + [None]:
+        invalid = [
+            (b'prefix {% if error %}unclosed', 'invalid Inja template'),
+            (b'prefix {{unknown}}', "variable 'unknown' not found"),
+            (b'prefix {% if title != "Page" %}{{unknown}}{% endif %}', "variable 'unknown' not found"),
+            (b'prefix\0hidden', 'page template contains a NUL byte'),
+            (b'x' * (1024 * 1024 + 1), 'source size 1048577 bytes exceeds read limit 1048576 bytes'),
+            (b'', 'page template must be nonempty'),
+            (None, 'cannot open page template'),
+        ]
+        for source, expected in invalid:
             with self.subTest(source=source[:40] if source else source):
                 if source is None:
                     self.template.unlink()
                 else:
                     self.template.write_bytes(source)
+                before = len(server.diagnostics())
                 status, headers, body = server.request('/')
                 self.assertEqual(status, 500)
+                diagnostic = server.diagnostics()[before:]
+                self.assertIn(str(self.template), diagnostic)
+                self.assertIn(expected, diagnostic)
+                self.assertNotIn('cannot read/render', diagnostic)
+                self.assertNotIn('cannot render error page', diagnostic)
                 self.assertNotIn(b'prefix', body)
                 self.assertEqual(body, b'Request failed.\n')
                 self.assertEqual(int(headers['content-length']), len(body))
@@ -783,7 +813,7 @@ class HttpTests(unittest.TestCase):
             (b'{% for link in navigation %}{{link.typo}}{% endfor %}', "variable 'link.typo' not found"),
             (b'{% if not navigation %}{{typo}}{% endif %}', "variable 'typo' not found"),
             (b'{% include "missing.html" %}', "include 'missing.html' not found"),
-            (b'x' * (1024 * 1024 + 1), 'exceeds 1 MiB'),
+            (b'x' * (1024 * 1024 + 1), 'source size 1048577 bytes exceeds read limit 1048576 bytes'),
         ]
         for data, diagnostic in invalid:
             with self.subTest(diagnostic=diagnostic):
@@ -817,6 +847,8 @@ class HttpTests(unittest.TestCase):
         self.assertEqual(status, 500)
         self.assertIn(b'<aside>', body)
         self.assertNotIn(b'x' * 100, body)
+        self.assertEqual(server.diagnostics().count('repeated.md: buffer limit exceeded (limit 1024 bytes,'), 1)
+        self.assertNotIn('invalid Inja template', server.diagnostics())
         self.assertEqual(server.request('/repeated', 'HEAD')[1]['content-length'], headers['content-length'])
         self.assertEqual(server.raw('HEAD', '/repeated')[1], b'')
 
