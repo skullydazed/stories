@@ -55,26 +55,10 @@ static void usage(FILE *output)
 
 static bool override_log_path(char **destination, const char *path)
 {
-	char absolute[STORIES_PATH_LIMIT], cwd[STORIES_PATH_LIMIT];
 	if (!*path)
 	{
 		logging_error(NULL, "log path must not be empty");
 		return false;
-	}
-	if (*path != '/')
-	{
-		if (!getcwd(cwd, sizeof(cwd)))
-		{
-			logging_error(NULL, "cannot resolve log path: %s", strerror(errno));
-			return false;
-		}
-		int length = snprintf(absolute, sizeof(absolute), "%s/%s", cwd, path);
-		if (length < 0 || (size_t)length >= sizeof(absolute))
-		{
-			logging_error(NULL, "log path is too long");
-			return false;
-		}
-		path = absolute;
 	}
 	if (strlen(path) >= STORIES_PATH_LIMIT)
 	{

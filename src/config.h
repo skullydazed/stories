@@ -34,8 +34,8 @@ struct configuration
 };
 
 /* On failure, output is empty and error contains a human-readable diagnostic.
- * Parsing has no filesystem effects; base_directory is the selected config's parent. */
-bool configuration_parse(const char *data, size_t size, const char *base_directory, struct configuration *output, char *error, size_t error_size);
+ * Parsing has no filesystem effects and preserves paths as supplied. */
+bool configuration_parse(const char *data, size_t size, struct configuration *output, char *error, size_t error_size);
 bool configuration_load(const char *explicit_path, struct configuration *output, char *error, size_t error_size);
 /* The executable supplies fixed default paths. Tests supply isolated files to
  * exercise the identical discovery policy without touching /etc. */

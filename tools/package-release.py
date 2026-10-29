@@ -78,8 +78,8 @@ def main():
         for relative in ['share/licenses/stories/inja/LICENSE', 'share/licenses/stories/inja/UPSTREAM.txt', 'share/licenses/stories/nlohmann-json/LICENSE.MIT']:
             if not (extracted / relative).is_file():
                 raise SystemExit('release is missing dependency provenance: ' + relative)
-        run(str(binary), '--config', str(config), '--check-config')
-        run(str(binary), '--config', str(extracted / 'share/stories/examples/docs.conf.example'), '--check-config')
+        run(str(binary), '--config', str(config), '--check-config', cwd=extracted)
+        run(str(binary), '--config', 'examples/docs.conf.example', '--check-config', cwd=extracted / 'share/stories')
     checksum = hashlib.sha256(archive.read_bytes()).hexdigest()
     archive.with_name(archive.name + '.sha256').write_text(f'{checksum}  {archive.name}\n', encoding='ascii')
     print(archive)

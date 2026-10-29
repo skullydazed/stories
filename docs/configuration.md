@@ -2,7 +2,7 @@
 
 Stories reads an INI configuration at startup. Use `--config PATH` to select a file explicitly, or let it check `./stories.conf` followed by `/etc/stories.conf`. An explicit path never falls back to discovery, and an existing but invalid discovery candidate prevents trying the next file.
 
-Filesystem paths in the INI configuration resolve relative to the selected configuration file's directory. Relative log paths supplied on the command line resolve against the process working directory. Moving a configuration file can therefore change which roots its relative paths select. Configuration changes require a restart.
+Relative filesystem paths in the INI configuration and on the command line resolve against the process working directory. The configuration file's location does not affect path resolution, and Stories does not change the working directory. Absolute paths are used as supplied. Configuration changes require a restart.
 
 ## A minimal configuration
 
@@ -33,7 +33,7 @@ Both directories must exist and be separate: neither may contain the other. Put 
 | `[content] output_limit` | `33554432` | Maximum complete HTML page size: 32 MiB. |
 | `[assets] root` | Required | Existing public static root, separate from content. |
 | `[site] title` | `Stories` | Site name in the layout and after the page title. |
-| `[site] template` | Required | HTML page template, relative to the configuration file or absolute. Checked at startup and read on each render. |
+| `[site] template` | Required | HTML page template, relative to the working directory or absolute. Checked at startup and read on each render. |
 | `[navigation] Label = URL` | No entries | Navigation links, rendered in configuration order. |
 
 Each document size limit must be positive and at most 1 GiB. The defaults are provisional caps, not measurements of a particular corpus or a guarantee that HTML always expands by less than four times. These limits apply per request; they do not cap the process's total memory use. Rendering that exceeds a limit returns a complete 500 response, without a partial successful page.

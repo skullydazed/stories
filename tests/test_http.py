@@ -397,7 +397,7 @@ class HttpTests(unittest.TestCase):
         self.template.write_text('{% invalid %}')
         # Fail after logging opens, so no listener is needed. Set umask only in the child shell, without changing the test process or using preexec_fn.
         command = ['sh', '-c', 'umask "$1"; shift; exec "$@"', 'stories-permissions', '000', str(BINARY), '--config', str(self.config)]
-        result = subprocess.run(command, capture_output=True, text=True, timeout=5)
+        result = subprocess.run(command, cwd=self.root, capture_output=True, text=True, timeout=5)
         self.assertNotEqual(result.returncode, 0)
         access = self.root / 'access.log'
         errors = self.root / 'error.log'
@@ -407,23 +407,47 @@ class HttpTests(unittest.TestCase):
         # Existing operator-managed permissions must survive opening for append.
         access.chmod(0o640)
         errors.chmod(0o640)
-        result = subprocess.run(command, capture_output=True, text=True, timeout=5)
+        result = subprocess.run(command, cwd=self.root, capture_output=True, text=True, timeout=5)
         self.assertNotEqual(result.returncode, 0)
         self.assertEqual(access.stat().st_mode & 0o777, 0o640)
         self.assertEqual(errors.stat().st_mode & 0o777, 0o640)
 
-    def test_ini_log_paths_are_relative_to_configuration(self):
-        server = self.start(access_log='access.log', error_log='error.log')
-        self.assertEqual(server.request('/?ini_log=1')[0], 200)
-        self.wait_for_log((self.root / 'access.log').read_text, 'ini_log=1')
-        server.close()
-        self.servers.remove(server)
-        # Run from another directory to distinguish INI and CLI path semantics.
-        server = Server(self.config, self.assets)
+    def test_configuration_paths_are_relative_to_working_directory(self):
+        self.write_config(access_log='access.log', error_log='error.log')
+        directory = self.root / 'config'
+        directory.mkdir()
+        self.config = self.config.rename(directory / 'stories.conf')
+        link = directory / 'linked.conf'
+        link.symlink_to(self.config.name)
+        (self.content / 'broken.md').write_text('[bad](../../outside.md)')
+        for index, config in enumerate([self.config, self.config.relative_to(self.root), link.relative_to(self.root)]):
+            with self.subTest(config=config):
+                result = subprocess.run([str(BINARY), '--config', str(config), '--check-config'], cwd=self.root, capture_output=True, text=True, timeout=5)
+                self.assertEqual(result.returncode, 0, result.stderr)
+                server = Server(config, self.root)
+                self.servers.append(server)
+                self.assertEqual(server.request('/')[0], 200)
+                self.assertEqual(server.request('/assets/sample.txt')[2], b'asset bytes\n')
+                self.assertEqual(server.request(f'/broken?cwd_log={index}')[0], 500)
+                self.wait_for_log((self.root / 'access.log').read_text, f'cwd_log={index}')
+                self.assertIn('broken.md', (self.root / 'error.log').read_text())
+                self.assertFalse((directory / 'access.log').exists())
+                self.assertFalse((directory / 'error.log').exists())
+                server.close()
+                self.servers.remove(server)
+
+    def test_absolute_configuration_paths_from_another_directory(self):
+        self.write_config(access_log='access.log', error_log='error.log')
+        self.config.write_text(self.config.read_text().replace('root=content\n', f'root={self.content}\n').replace('root=assets\n', f'root={self.assets}\n').replace('template=page.html\n', f'template={self.template}\n'))
+        directory = self.root / 'other'
+        directory.mkdir()
+        server = Server(self.config, directory)
         self.servers.append(server)
-        self.assertEqual(server.request('/?ini_log=2')[0], 200)
-        self.wait_for_log((self.root / 'access.log').read_text, 'ini_log=2')
-        self.assertFalse((self.assets / 'access.log').exists())
+        self.assertEqual(server.request('/?absolute_paths=1')[0], 200)
+        self.assertEqual(server.request('/assets/sample.txt')[2], b'asset bytes\n')
+        self.wait_for_log((directory / 'access.log').read_text, 'absolute_paths=1')
+        self.assertFalse((self.root / 'access.log').exists())
+        self.assertFalse((self.root / 'error.log').exists())
 
     def test_independent_log_destinations(self):
         (self.content / 'broken.md').write_text('[bad](../../outside.md)')
@@ -463,12 +487,12 @@ class HttpTests(unittest.TestCase):
         for setting in ['access_log', 'error_log']:
             with self.subTest(setting=setting):
                 self.write_config(**{setting: 'missing/log'})
-                result = subprocess.run([str(BINARY), '--config', str(self.config)], capture_output=True, text=True, timeout=5)
+                result = subprocess.run([str(BINARY), '--config', str(self.config)], cwd=self.root, capture_output=True, text=True, timeout=5)
                 self.assertNotEqual(result.returncode, 0)
                 self.assertIn('cannot open log', result.stderr)
                 self.assertNotIn('Listening on', result.stdout)
         self.write_config(access_log='check-access.log', error_log='check-error.log')
-        result = subprocess.run([str(BINARY), '--config', str(self.config), '--check-config'], capture_output=True, text=True, timeout=5)
+        result = subprocess.run([str(BINARY), '--config', str(self.config), '--check-config'], cwd=self.root, capture_output=True, text=True, timeout=5)
         self.assertEqual(result.returncode, 0, result.stderr)
         self.assertFalse((self.root / 'check-access.log').exists())
         self.assertFalse((self.root / 'check-error.log').exists())
@@ -477,14 +501,14 @@ class HttpTests(unittest.TestCase):
             occupied.bind(('127.0.0.1', 0))
             occupied.listen()
             endpoint = f'127.0.0.1:{occupied.getsockname()[1]}'
-            result = subprocess.run([str(BINARY), '--config', str(self.config), '--listen', endpoint], capture_output=True, text=True, timeout=5)
+            result = subprocess.run([str(BINARY), '--config', str(self.config), '--listen', endpoint], cwd=self.root, capture_output=True, text=True, timeout=5)
             self.assertNotEqual(result.returncode, 0)
             self.assertIn('civetweb:', (self.root / 'listener-error.log').read_text())
             self.assertIn('cannot start HTTP listener', (self.root / 'listener-error.log').read_text())
             self.assertEqual(result.stderr, '')
         self.write_config(error_log='startup-error.log')
         self.template.write_text('{% invalid %}')
-        result = subprocess.run([str(BINARY), '--config', str(self.config)], capture_output=True, text=True, timeout=5)
+        result = subprocess.run([str(BINARY), '--config', str(self.config)], cwd=self.root, capture_output=True, text=True, timeout=5)
         self.assertNotEqual(result.returncode, 0)
         self.assertIn('invalid Inja template', (self.root / 'startup-error.log').read_text())
         self.assertEqual(result.stderr, '')
@@ -631,7 +655,7 @@ class HttpTests(unittest.TestCase):
         self.assertNotEqual(result.returncode, 0)
         result = subprocess.run([str(BINARY), '--config', str(self.config), '--threads', '0', '--check-config'], cwd=self.root, capture_output=True, text=True)
         self.assertNotEqual(result.returncode, 0)
-        result = subprocess.run([str(BINARY), '--config', str(self.config), '--threads', '2', '--check-config'], cwd='/', capture_output=True, text=True)
+        result = subprocess.run([str(BINARY), '--config', str(self.config), '--threads', '2', '--check-config'], cwd=self.root, capture_output=True, text=True)
         self.assertEqual(result.returncode, 0, result.stderr)
         self.config.write_text('[unknown]\nbad=true\n')
         result = subprocess.run([str(BINARY), '--check-config'], cwd=self.root, capture_output=True, text=True)
@@ -650,7 +674,7 @@ class HttpTests(unittest.TestCase):
 ''')
         self.write_config()
         self.config.write_text(self.config.read_text().replace('title=HTTP Test', 'title=Site & <title>').replace('Home=/\n', 'One & <first>=/first?x=1&y=2\nTwo=/second\'quoted\n'))
-        server = Server(self.config, '/', '--threads', '2')
+        server = Server(self.config, self.root, '--threads', '2')
         self.servers.append(server)
         status, headers, body = server.request('/command/time')
         self.assertEqual(status, 200)
@@ -676,7 +700,7 @@ class HttpTests(unittest.TestCase):
         self.assertEqual(server.request('/page.html')[0], 404)
         server.stop()
         self.config.write_text(self.config.read_text().split('[navigation]')[0])
-        server = Server(self.config, '/')
+        server = Server(self.config, self.root)
         self.servers.append(server)
         self.assertIn(b'<nav>No navigation</nav>', server.request('/')[2])
 
@@ -700,7 +724,7 @@ class HttpTests(unittest.TestCase):
         for template, expected in cases:
             with self.subTest(template=template):
                 self.template.write_text(template)
-                result = subprocess.run([str(BINARY), '--config', str(self.config), '--check-config'], capture_output=True, text=True, timeout=5)
+                result = subprocess.run([str(BINARY), '--config', str(self.config), '--check-config'], cwd=self.root, capture_output=True, text=True, timeout=5)
                 self.assertEqual(result.returncode, 0, result.stderr)
                 for path, expected_status in [('/', 200), ('/missing', 404)]:
                     status, headers, body = server.request(path)
@@ -769,7 +793,7 @@ class HttpTests(unittest.TestCase):
         self.write_config()
         valid = self.config.read_text()
         self.config.write_text(valid.replace('template=page.html\n', ''))
-        result = subprocess.run([str(BINARY), '--config', str(self.config), '--check-config'], capture_output=True, text=True, timeout=5)
+        result = subprocess.run([str(BINARY), '--config', str(self.config), '--check-config'], cwd=self.root, capture_output=True, text=True, timeout=5)
         self.assertNotEqual(result.returncode, 0)
         self.assertIn('missing required setting [site] template', result.stderr)
         self.config.write_text(valid)
@@ -789,10 +813,10 @@ class HttpTests(unittest.TestCase):
             with self.subTest(diagnostic=diagnostic):
                 self.template.write_bytes(data)
                 for option in ['--check-config', '--listen=127.0.0.1:0']:
-                    result = subprocess.run([str(BINARY), '--config', str(self.config), option], capture_output=True, text=True, timeout=5)
+                    result = subprocess.run([str(BINARY), '--config', str(self.config), option], cwd=self.root, capture_output=True, text=True, timeout=5)
                     self.assertNotEqual(result.returncode, 0)
                     self.assertNotIn('Listening on', result.stdout)
-                    self.assertIn(str(self.template), result.stderr)
+                    self.assertIn(self.template.name, result.stderr)
                     self.assertIn(diagnostic, result.stderr)
         self.template.unlink()
         for kind, diagnostic in [('missing', 'cannot open page template'), ('directory', 'regular file'), ('fifo', 'regular file')]:
@@ -801,7 +825,7 @@ class HttpTests(unittest.TestCase):
                     self.template.mkdir()
                 elif kind == 'fifo':
                     os.mkfifo(self.template)
-                result = subprocess.run([str(BINARY), '--config', str(self.config), '--check-config'], capture_output=True, text=True, timeout=5)
+                result = subprocess.run([str(BINARY), '--config', str(self.config), '--check-config'], cwd=self.root, capture_output=True, text=True, timeout=5)
                 self.assertNotEqual(result.returncode, 0)
                 self.assertIn(diagnostic, result.stderr)
                 if kind == 'directory':
@@ -834,7 +858,7 @@ class HttpTests(unittest.TestCase):
         for contents, diagnostic in cases:
             with self.subTest(diagnostic=diagnostic):
                 self.config.write_text(contents)
-                result = subprocess.run([str(BINARY), '--config', str(self.config), '--check-config'], capture_output=True, text=True, timeout=5)
+                result = subprocess.run([str(BINARY), '--config', str(self.config), '--check-config'], cwd=self.root, capture_output=True, text=True, timeout=5)
                 self.assertNotEqual(result.returncode, 0)
                 self.assertIn(f'{self.config}: ', result.stderr)
                 self.assertIn(diagnostic, result.stderr)
@@ -844,14 +868,14 @@ class HttpTests(unittest.TestCase):
         text = self.config.read_text()
         for invalid in [text.replace('root=content', 'root=missing'), text.replace('[assets]\nroot=assets', '[assets]\nroot=content')]:
             self.config.write_text(invalid)
-            result = subprocess.run([str(BINARY), '--config', str(self.config)], capture_output=True, text=True, timeout=5)
+            result = subprocess.run([str(BINARY), '--config', str(self.config)], cwd=self.root, capture_output=True, text=True, timeout=5)
             self.assertNotEqual(result.returncode, 0)
         self.config.write_text(text)
         with contextlib.closing(socket.socket()) as occupied:
             occupied.bind(('127.0.0.1', 0))
             occupied.listen()
             endpoint = f'127.0.0.1:{occupied.getsockname()[1]}'
-            result = subprocess.run([str(BINARY), '--config', str(self.config), '--listen', endpoint], capture_output=True, text=True, timeout=5)
+            result = subprocess.run([str(BINARY), '--config', str(self.config), '--listen', endpoint], cwd=self.root, capture_output=True, text=True, timeout=5)
             self.assertNotEqual(result.returncode, 0)
 
 

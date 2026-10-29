@@ -29,11 +29,11 @@ Release archives contain `bin/stories`, the README, and the same `share/` tree a
 
 Download the matching `stories-VERSION-TARGET.tar.gz` and its `.sha256` file from the [project releases](https://github.com/skullydazed/stories/releases). Verify the checksum and extract the archive. The macOS binaries are not Developer ID signed or notarized.
 
-You can run the extracted `bin/stories` in place or install the tree under a chosen prefix. Relative paths in a configuration resolve against that configuration's location.
+You can run the extracted `bin/stories` in place or install the tree under a chosen prefix. Relative paths in a configuration resolve against the process working directory.
 
 ## Serve the project documentation
 
-The supplied documentation configuration works in both the source checkout and the installed tree. It locates the sibling `docs/`, `assets/`, and `templates/` directories relative to `examples/`.
+The supplied documentation configuration uses `docs/`, `assets/`, and `templates/` relative to the process working directory. Run it from the checkout root or the installed `share/stories/` directory.
 
 For a source checkout:
 
@@ -44,18 +44,20 @@ For a source checkout:
 For an installation under `/usr/local`:
 
 ```sh
-stories --config /usr/local/share/stories/examples/docs.conf.example --check-config
-stories --config /usr/local/share/stories/examples/docs.conf.example
+cd /usr/local/share/stories
+stories --config examples/docs.conf.example --check-config
+stories --config examples/docs.conf.example
 ```
 
 For an extracted release, run these commands from the extracted directory:
 
 ```sh
-./bin/stories --config share/stories/examples/docs.conf.example --check-config
-./bin/stories --config share/stories/examples/docs.conf.example
+cd share/stories
+../../bin/stories --config examples/docs.conf.example --check-config
+../../bin/stories --config examples/docs.conf.example
 ```
 
-The default endpoint is `127.0.0.1:8080`. For a separate deployment layout, copy the `docs/` tree to your chosen content root, provide an asset root containing `pico.min.css`, `dark_toggle.css`, `theme.css`, `site.css`, and `dark_toggle.js`, and copy `templates/page.html` outside those public roots. Set both roots and `[site] template` explicitly in your configuration. Moving a configuration outside the supplied tree requires adjusting its relative paths or using absolute paths. Existing configurations need the required `template` setting when upgrading.
+The default endpoint is `127.0.0.1:8080`. For a separate deployment layout, copy the `docs/` tree to your chosen content root, provide an asset root containing `pico.min.css`, `dark_toggle.css`, `theme.css`, `site.css`, and `dark_toggle.js`, and copy `templates/page.html` outside those public roots. Set both roots and `[site] template` explicitly in your configuration. Use paths relative to the directory from which Stories will run, or use absolute paths. Existing configurations need the required `template` setting when upgrading.
 
 ## Configure nginx
 
@@ -89,12 +91,12 @@ After external rename/create rotation, send SIGUSR1 to the Stories process to re
 
 ## Run as a FreeBSD service
 
-The [rc.d example](https://github.com/skullydazed/stories/blob/main/examples/stories.freebsd) uses FreeBSD's `daemon` and assumes the binary is installed at `/usr/local/bin/stories`. With the standard prefix, install the script and configure it to serve the bundled documentation:
+The [rc.d example](https://github.com/skullydazed/stories/blob/main/examples/stories.freebsd) uses FreeBSD's `daemon` and assumes the binary is installed at `/usr/local/bin/stories`. Create `/etc/stories.conf` with absolute content, asset, and template paths, then install the script and enable the service:
 
 ```sh
 install -m 0555 /usr/local/share/stories/examples/stories.freebsd /usr/local/etc/rc.d/stories
 sysrc stories_enable=YES
-sysrc stories_config=/usr/local/share/stories/examples/docs.conf.example
+sysrc stories_config=/etc/stories.conf
 service stories start
 ```
 

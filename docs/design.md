@@ -14,7 +14,7 @@ Review memory ownership, peak live allocations, and release paths when changing 
 
 ## Subsystem boundaries
 
-`configuration` owns parsed strings, directory order, and navigation entries. Parsing accepts a byte span and base directory, performs no filesystem access, and returns either a fully usable configuration or an empty object. Loading implements file discovery and bounded reading around that parser. The executable supplies fixed defaults; the same search routine accepts isolated paths in tests.
+`configuration` owns parsed strings, directory order, and navigation entries. Parsing accepts a byte span, preserves paths as supplied, performs no filesystem access, and returns either a fully usable configuration or an empty object. Loading implements file discovery and bounded reading around that parser. Relative paths resolve through ordinary filesystem operations against the process working directory, which Stories does not change. The executable supplies fixed defaults; the same search routine accepts isolated paths in tests.
 
 `document` owns descriptor-relative lookup and reading. Resolution receives an already decoded path, immutable configuration, and a borrowed content-root descriptor. Every result is initialized, owns any returned descriptor and location buffer, and must be released even after failure. Outcomes distinguish a document, redirect, invalid request, missing document, and internal failure.
 

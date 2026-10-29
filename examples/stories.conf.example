@@ -1,5 +1,5 @@
 # Copy to stories.conf and adjust the site settings below.
-# Paths are relative to this configuration file. Create both roots before starting.
+# Paths are relative to the process working directory. Create both roots before starting.
 [server]
 #listen = 127.0.0.1:8080
 #threads = 8
