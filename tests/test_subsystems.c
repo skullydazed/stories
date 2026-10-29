@@ -360,12 +360,15 @@ static void test_failure_diagnostics(void)
 	struct buffer output;
 	CHECK(!document_read(-1, "unreadable.md", 64, &output, &logging));
 	buffer_free(&output);
-	int descriptors[2];
-	CHECK(!pipe(descriptors));
-	CHECK(!document_read(descriptors[1], "write-only.md", 65536, &output, &logging));
+	/* FreeBSD pipes are bidirectional; an explicitly write-only file makes read fail without waiting for input. */
+	char source_path[STORIES_PATH_LIMIT];
+	CHECK(snprintf(source_path, sizeof(source_path), "%s/write-only.md", directory) > 0);
+	int write_only = open(source_path, O_WRONLY | O_CREAT | O_EXCL | O_CLOEXEC, 0600);
+	CHECK(write_only >= 0);
+	CHECK(!document_read(write_only, "write-only.md", 65536, &output, &logging));
 	buffer_free(&output);
-	close(descriptors[0]);
-	close(descriptors[1]);
+	CHECK(!close(write_only));
+	CHECK(!unlink(source_path));
 	struct document_route route;
 	document_resolve(-1, &configuration, "/missing", 8, &route, &logging);
 	CHECK(route.status == ROUTE_FAILURE);
