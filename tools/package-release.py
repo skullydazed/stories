@@ -16,6 +16,25 @@ def run(*command, **kwargs):
     return subprocess.run(command, check=True, **kwargs)
 
 
+def verify_linkage(binary, target):
+    if target == 'linux-x86_64':
+        program_headers = subprocess.check_output(['readelf', '-lW', str(binary)], text=True)
+        dynamic_section = subprocess.check_output(['readelf', '-dW', str(binary)], text=True)
+        if re.search(r'\bINTERP\b', program_headers) or re.search(r'\(NEEDED\)', dynamic_section):
+            raise SystemExit('Linux release is not statically linked:\n' + program_headers + dynamic_section)
+        return
+    if sys.platform == 'darwin':
+        linked = subprocess.check_output(['otool', '-L', str(binary)], text=True)
+        libraries = [line.strip().split(' (', 1)[0] for line in linked.splitlines()[1:]]
+        allowed = lambda library: library.startswith(('/usr/lib/', '/System/Library/'))
+    else:
+        linked = subprocess.check_output(['ldd', str(binary)], text=True)
+        libraries = re.findall(r'=>\s+(\S+)', linked)
+        allowed = lambda library: library.startswith(('/lib/', '/lib64/', '/usr/lib/'))
+    if not libraries or any(not allowed(library) for library in libraries) or re.search(r'lib(?:civetweb|md4c)', linked):
+        raise SystemExit('release has unexpected runtime dependencies:\n' + linked)
+
+
 def main():
     if len(sys.argv) != 4:
         raise SystemExit('usage: package-release.py BUILD_DIRECTORY DEPENDENCY_PREFIX TARGET')
@@ -47,16 +66,7 @@ def main():
         run('tar', '-xzf', str(archive), '-C', str(pathlib.Path(temporary)))
         (pathlib.Path(temporary) / name).rename(extracted)
         binary = extracted / 'bin/stories'
-        if sys.platform == 'darwin':
-            linked = subprocess.check_output(['otool', '-L', str(binary)], text=True)
-            libraries = [line.strip().split(' (', 1)[0] for line in linked.splitlines()[1:]]
-            allowed = lambda library: library.startswith(('/usr/lib/', '/System/Library/'))
-        else:
-            linked = subprocess.check_output(['ldd', str(binary)], text=True)
-            libraries = re.findall(r'=>\s+(\S+)', linked)
-            allowed = lambda library: library.startswith(('/lib/', '/lib64/', '/usr/lib/'))
-        if not libraries or any(not allowed(library) for library in libraries) or re.search(r'lib(?:civetweb|md4c)', linked):
-            raise SystemExit('release has unexpected runtime dependencies:\n' + linked)
+        verify_linkage(binary, target)
         run(str(binary), '--version')
         run(sys.executable, str(root / 'tests/test_http.py'), str(binary))
         # Verify the installed example and presentation files together with authored content.

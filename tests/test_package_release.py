@@ -58,5 +58,29 @@ class ReleaseArguments(unittest.TestCase):
         self.install.assert_not_called()
 
 
+class ReleaseLinkage(unittest.TestCase):
+    def test_linux_static_binary_passes(self):
+        binary = pathlib.Path('stories')
+        with patch.object(PACKAGE.subprocess, 'check_output', side_effect=[
+            'Program Headers:\n',
+            'There is no dynamic section in this file.\n',
+        ]) as inspect:
+            PACKAGE.verify_linkage(binary, 'linux-x86_64')
+        self.assertEqual(inspect.call_args_list[0].args[0], ['readelf', '-lW', str(binary)])
+        self.assertEqual(inspect.call_args_list[1].args[0], ['readelf', '-dW', str(binary)])
+
+    def test_linux_dynamic_dependencies_are_rejected(self):
+        binary = pathlib.Path('stories')
+        dynamic_outputs = [
+            ('Program Headers:\nINTERP\n', 'There is no dynamic section in this file.\n'),
+            ('Program Headers:\n', 'Dynamic section:\n (NEEDED) Shared library: [libc.so.6]\n'),
+        ]
+        for program_headers, dynamic_section in dynamic_outputs:
+            with self.subTest(program_headers=program_headers, dynamic_section=dynamic_section):
+                with patch.object(PACKAGE.subprocess, 'check_output', side_effect=[program_headers, dynamic_section]):
+                    with self.assertRaisesRegex(SystemExit, 'not statically linked'):
+                        PACKAGE.verify_linkage(binary, 'linux-x86_64')
+
+
 if __name__ == '__main__':
     unittest.main()

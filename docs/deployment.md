@@ -18,11 +18,11 @@ Installation does not create a service, overwrite `/etc/stories.conf`, create a 
 
 ## Use a release archive
 
-Release archives contain `bin/stories`, the README, and the same `share/` tree as an installation. CivetWeb and MD4C are statically linked; the binary still requires platform system libraries.
+Release archives contain `bin/stories`, the README, and the same `share/` tree as an installation. The Linux x86-64 binary is fully statically linked and has no glibc runtime dependency. Other targets statically link CivetWeb and MD4C but still require their platform system libraries.
 
 | Target | Runtime baseline |
 | --- | --- |
-| `linux-x86_64` | Ubuntu 22.04 / glibc 2.35 or newer; this is a glibc build. |
+| `linux-x86_64` | Linux x86-64; no system shared-library dependencies. |
 | `macos-arm64` | macOS 15 on Apple Silicon. |
 | `macos-x86_64` | macOS 15 on Intel. |
 | `freebsd14-amd64` | FreeBSD 14.4 on amd64. |
