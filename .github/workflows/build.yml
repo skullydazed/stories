@@ -58,7 +58,11 @@ jobs:
         run: |
           export CC=clang CXX=clang++
           python3 tools/build-dependencies.py build-deps
-          cmake -B build-release -G Ninja -DCMAKE_BUILD_TYPE=Release -DCMAKE_PREFIX_PATH="$PWD/build-deps" -DSTORIES_STATIC_DEPENDENCIES=ON -DSTORIES_WARNINGS_AS_ERRORS=ON
+          cmake_options=()
+          if [[ "$TARGET" == linux-x86_64 ]]; then
+            cmake_options+=("-DCMAKE_EXE_LINKER_FLAGS=-static")
+          fi
+          cmake -B build-release -G Ninja -DCMAKE_BUILD_TYPE=Release -DCMAKE_PREFIX_PATH="$PWD/build-deps" -DSTORIES_STATIC_DEPENDENCIES=ON -DSTORIES_WARNINGS_AS_ERRORS=ON "${cmake_options[@]}"
           cmake --build build-release --parallel 2
           ctest --test-dir build-release --output-on-failure --parallel 3
           python3 tools/package-release.py build-release build-deps "$TARGET"
